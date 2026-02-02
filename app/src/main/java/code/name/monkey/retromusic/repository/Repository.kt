@@ -131,17 +131,93 @@ class RealRepository(
     override suspend fun searchArtists(query: String): List<Artist> =
         artistRepository.artists(query)
 
-    override suspend fun fetchAlbums(): List<Album> = albumRepository.albums()
+    override suspend fun fetchAlbums(): List<Album> {
+        val localAlbums = albumRepository.albums()
+        val webDAVSongs = webDAVRepository.getAllSongs()
+        if (webDAVSongs.isEmpty()) {
+            return localAlbums
+        }
+        // Create albums from WebDAV songs
+        val webDAVAlbums = (albumRepository as RealAlbumRepository).splitIntoAlbums(webDAVSongs, sorted = false)
+        // Merge: use album title as key to avoid ID conflicts
+        val albumMap = mutableMapOf<String, Album>()
+        localAlbums.forEach { album ->
+            albumMap[album.title.lowercase()] = album
+        }
+        webDAVAlbums.forEach { album ->
+            val key = album.title.lowercase()
+            val existing = albumMap[key]
+            if (existing != null) {
+                // Merge songs into existing album
+                albumMap[key] = Album(existing.id, existing.songs + album.songs)
+            } else {
+                albumMap[key] = album
+            }
+        }
+        return albumMap.values.toList()
+    }
 
-    override suspend fun albumByIdAsync(albumId: Long): Album = albumRepository.album(albumId)
+    override suspend fun albumByIdAsync(albumId: Long): Album {
+        // First try local album
+        val localAlbum = albumRepository.album(albumId)
+        if (localAlbum.songs.isNotEmpty()) {
+            return localAlbum
+        }
+        // Try to find in WebDAV songs
+        val webDAVSongs = webDAVRepository.getAllSongs()
+        val matchingSongs = webDAVSongs.filter { it.albumId == albumId }
+        if (matchingSongs.isNotEmpty()) {
+            return Album(albumId, matchingSongs)
+        }
+        return localAlbum
+    }
 
     override fun albumById(albumId: Long): Album = albumRepository.album(albumId)
 
-    override suspend fun fetchArtists(): List<Artist> = artistRepository.artists()
+    override suspend fun fetchArtists(): List<Artist> {
+        val localArtists = artistRepository.artists()
+        val webDAVSongs = webDAVRepository.getAllSongs()
+        if (webDAVSongs.isEmpty()) {
+            return localArtists
+        }
+        // Create albums from WebDAV songs, then artists from albums
+        val webDAVAlbums = (albumRepository as RealAlbumRepository).splitIntoAlbums(webDAVSongs, sorted = false)
+        val webDAVArtists = (artistRepository as RealArtistRepository).splitIntoArtists(webDAVAlbums)
+        // Merge: use artist name as key to avoid ID conflicts
+        val artistMap = mutableMapOf<String, Artist>()
+        localArtists.forEach { artist ->
+            artistMap[artist.name.lowercase()] = artist
+        }
+        webDAVArtists.forEach { artist ->
+            val key = artist.name.lowercase()
+            val existing = artistMap[key]
+            if (existing != null) {
+                // Merge albums into existing artist
+                artistMap[key] = Artist(existing.id, existing.albums + artist.albums, existing.isAlbumArtist)
+            } else {
+                artistMap[key] = artist
+            }
+        }
+        return artistMap.values.toList()
+    }
 
     override suspend fun albumArtists(): List<Artist> = artistRepository.albumArtists()
 
-    override suspend fun artistById(artistId: Long): Artist = artistRepository.artist(artistId)
+    override suspend fun artistById(artistId: Long): Artist {
+        // First try local artist
+        val localArtist = artistRepository.artist(artistId)
+        if (localArtist.songs.isNotEmpty()) {
+            return localArtist
+        }
+        // Try to find in WebDAV songs
+        val webDAVSongs = webDAVRepository.getAllSongs()
+        val matchingSongs = webDAVSongs.filter { it.artistId == artistId }
+        if (matchingSongs.isNotEmpty()) {
+            val albums = (albumRepository as RealAlbumRepository).splitIntoAlbums(matchingSongs, sorted = false)
+            return Artist(artistId, albums)
+        }
+        return localArtist
+    }
 
     override suspend fun albumArtistByName(name: String): Artist =
         artistRepository.albumArtist(name)
