@@ -177,7 +177,9 @@ dependencies {
     implementation(libs.androidx.exoplayer)
 
     // WebDAV support
-    implementation("com.github.thegrizzlylabs:sardine-android:0.8")
+    implementation("com.github.thegrizzlylabs:sardine-android:0.8") {
+        exclude(group = "xpp3", module = "xpp3")
+    }
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 }
