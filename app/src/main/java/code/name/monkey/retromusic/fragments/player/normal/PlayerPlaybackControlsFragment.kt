@@ -28,19 +28,29 @@ import code.name.monkey.appthemehelper.util.MaterialValueHelper
 import code.name.monkey.appthemehelper.util.TintHelper
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.databinding.FragmentPlayerPlaybackControlsBinding
+import code.name.monkey.retromusic.dialogs.AddToPlaylistDialog
+import code.name.monkey.retromusic.dialogs.CreatePlaylistDialog
+import code.name.monkey.retromusic.dialogs.DeleteSongsDialog
+import code.name.monkey.retromusic.dialogs.PlaybackSpeedDialog
+import code.name.monkey.retromusic.dialogs.SleepTimerDialog
+import code.name.monkey.retromusic.dialogs.SongDetailDialog
 import code.name.monkey.retromusic.extensions.*
 import code.name.monkey.retromusic.fragments.base.AbsPlayerControlsFragment
 import code.name.monkey.retromusic.fragments.base.goToAlbum
 import code.name.monkey.retromusic.fragments.base.goToArtist
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
+import code.name.monkey.retromusic.repository.RealRepository
 import code.name.monkey.retromusic.repository.Repository
 import code.name.monkey.retromusic.util.MusicUtil
+import code.name.monkey.retromusic.util.NavigationUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
+import code.name.monkey.retromusic.util.RingtoneManager
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 
 class PlayerPlaybackControlsFragment :
@@ -249,7 +259,13 @@ class PlayerPlaybackControlsFragment :
             val song = MusicPlayerRemote.currentSong
             when (item.itemId) {
                 R.id.action_add_to_playlist -> {
-                    // Add to playlist - handled by parent activity
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val playlists = get<RealRepository>().fetchPlaylists()
+                        withContext(Dispatchers.Main) {
+                            AddToPlaylistDialog.create(playlists, song)
+                                .show(childFragmentManager, "ADD_PLAYLIST")
+                        }
+                    }
                     true
                 }
                 R.id.action_share -> {
@@ -267,6 +283,49 @@ class PlayerPlaybackControlsFragment :
                 }
                 R.id.action_go_to_artist -> {
                     goToArtist(requireActivity())
+                    true
+                }
+                R.id.action_playback_speed -> {
+                    PlaybackSpeedDialog.newInstance().show(childFragmentManager, "PLAYBACK_SETTINGS")
+                    true
+                }
+                R.id.action_sleep_timer -> {
+                    SleepTimerDialog().show(parentFragmentManager, "SLEEP_TIMER")
+                    true
+                }
+                R.id.action_equalizer -> {
+                    NavigationUtil.openEqualizer(requireActivity())
+                    true
+                }
+                R.id.action_go_to_drive_mode -> {
+                    NavigationUtil.gotoDriveMode(requireActivity())
+                    true
+                }
+                R.id.action_save_playing_queue -> {
+                    CreatePlaylistDialog.create(ArrayList(MusicPlayerRemote.playingQueue))
+                        .show(childFragmentManager, "ADD_TO_PLAYLIST")
+                    true
+                }
+                R.id.action_set_as_ringtone -> {
+                    requireContext().run {
+                        if (RingtoneManager.requiresDialog(this)) {
+                            RingtoneManager.showDialog(this)
+                        } else {
+                            RingtoneManager.setRingtone(this, song)
+                        }
+                    }
+                    true
+                }
+                R.id.action_details -> {
+                    SongDetailDialog.create(song).show(childFragmentManager, "SONG_DETAIL")
+                    true
+                }
+                R.id.action_clear_playing_queue -> {
+                    MusicPlayerRemote.clearQueue()
+                    true
+                }
+                R.id.action_delete_from_device -> {
+                    DeleteSongsDialog.create(song).show(childFragmentManager, "DELETE_SONGS")
                     true
                 }
                 else -> false
