@@ -56,26 +56,21 @@ class SardineWebDAVClient : WebDAVClient {
         config: WebDAVConfig,
         path: String
     ): List<WebDAVFile> = withContext(Dispatchers.IO) {
-        try {
-            val sardine = createSardine(config)
-            val url = buildUrl(config, path)
-            Log.d(TAG, "Listing files at: $url")
+        val sardine = createSardine(config)
+        val url = buildUrl(config, path)
+        Log.d(TAG, "Listing files at: $url")
 
-            val resources = sardine.list(url)
-            Log.d(TAG, "Found ${resources.size} resources")
+        val resources = sardine.list(url)
+        Log.d(TAG, "Found ${resources.size} resources")
 
-            // Log each resource for debugging
-            resources.forEachIndexed { index, res ->
-                Log.d(TAG, "Resource[$index]: name=${res.name}, path=${res.path}, href=${res.href}, isDir=${res.isDirectory}")
-            }
+        // Log each resource for debugging
+        resources.forEachIndexed { index, res ->
+            Log.d(TAG, "Resource[$index]: name=${res.name}, path=${res.path}, href=${res.href}, isDir=${res.isDirectory}")
+        }
 
-            // Skip the first item which is the directory itself
-            resources.drop(1).map { resource ->
-                resourceToWebDAVFile(resource, path)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error listing files: ${e.message}", e)
-            emptyList()
+        // Skip the first item which is the directory itself
+        resources.drop(1).map { resource ->
+            resourceToWebDAVFile(resource, path)
         }
     }
 

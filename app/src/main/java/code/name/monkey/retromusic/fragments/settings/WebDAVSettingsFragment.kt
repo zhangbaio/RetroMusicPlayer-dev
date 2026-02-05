@@ -20,25 +20,21 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import code.name.monkey.retromusic.R
+import code.name.monkey.retromusic.adapters.SelectedFolderAdapter
 import code.name.monkey.retromusic.adapters.WebDAVConfigAdapter
-import code.name.monkey.retromusic.adapters.WebDAVFolderAdapter
 import code.name.monkey.retromusic.databinding.DialogWebdavConfigBinding
 import code.name.monkey.retromusic.databinding.FragmentWebdavSettingsBinding
 import code.name.monkey.retromusic.dialogs.WebDAVFolderBrowserDialog
 import code.name.monkey.retromusic.extensions.showToast
 import code.name.monkey.retromusic.model.WebDAVConfig
-import code.name.monkey.retromusic.webdav.WebDAVFile
 import code.name.monkey.retromusic.fragments.webdav.WebDAVUiState
 import code.name.monkey.retromusic.fragments.webdav.WebDAVViewModel
 import code.name.monkey.retromusic.webdav.WebDAVCryptoUtil
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 /**
@@ -57,8 +53,9 @@ class WebDAVSettingsFragment : Fragment(),
     private var editingConfig: WebDAVConfig? = null
 
     // For folder selection in dialog
-    private var selectedFoldersInDialog: MutableSet<String> = mutableSetOf()
-    private var folderAdapter: WebDAVFolderAdapter? = null
+    private var selectedFoldersInDialog: MutableList<String> = mutableListOf()
+    private var selectedFolderAdapter: SelectedFolderAdapter? = null
+    private var currentDialogBinding: DialogWebdavConfigBinding? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -146,9 +143,10 @@ class WebDAVSettingsFragment : Fragment(),
 
     private fun showConfigDialog(config: WebDAVConfig? = null) {
         editingConfig = config
-        selectedFoldersInDialog = config?.musicFolders?.toMutableSet() ?: mutableSetOf()
+        selectedFoldersInDialog = config?.musicFolders?.toMutableList() ?: mutableListOf()
 
         val dialogBinding = DialogWebdavConfigBinding.inflate(layoutInflater, null, false)
+        currentDialogBinding = dialogBinding
 
         // Pre-fill if editing
         config?.let {
@@ -193,16 +191,19 @@ class WebDAVSettingsFragment : Fragment(),
     }
 
     private fun setupFoldersRecyclerView(dialogBinding: DialogWebdavConfigBinding) {
-        folderAdapter = WebDAVFolderAdapter(
-            folders = selectedFoldersInDialog.map { WebDAVFile(it, it, true) },
-            onFolderClick = { /* Folder navigation handled by separate dialog */ },
-            onFolderSelected = { /* Already selected */ },
-            selectedFolders = selectedFoldersInDialog
+        selectedFolderAdapter = SelectedFolderAdapter(
+            folders = selectedFoldersInDialog.toList(),
+            onEditClick = { folderPath, position ->
+                showEditFolderDialog(dialogBinding, folderPath, position)
+            },
+            onDeleteClick = { folderPath, position ->
+                showDeleteFolderConfirmation(dialogBinding, folderPath, position)
+            }
         )
 
         dialogBinding.foldersRecyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())
-            adapter = folderAdapter
+            adapter = selectedFolderAdapter
         }
 
         dialogBinding.addFolderButton.setOnClickListener {
@@ -238,9 +239,6 @@ class WebDAVSettingsFragment : Fragment(),
     ) {
         val input = android.widget.EditText(requireContext())
         input.hint = "/Music"
-        if (selectedFoldersInDialog.isNotEmpty()) {
-            input.setText(selectedFoldersInDialog.first())
-        }
 
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Add Music Folder")
@@ -249,38 +247,106 @@ class WebDAVSettingsFragment : Fragment(),
             .setPositiveButton("Add") { _, _ ->
                 val folderPath = input.text.toString().trim()
                 if (folderPath.isNotEmpty()) {
-                    // Clean up the path
-                    val cleanPath = if (!folderPath.startsWith("/")) "/$folderPath" else folderPath
+                    val finalPath = normalizeFolderPath(folderPath)
+                    if (!selectedFoldersInDialog.contains(finalPath)) {
+                        selectedFoldersInDialog.add(finalPath)
+                        updateFoldersDisplay(dialogBinding)
+                    }
+                }
+            }
+            .setNeutralButton("Browse") { _, _ ->
+                // Open folder browser dialog for adding new folders
+                showFolderBrowserDialog(serverUrl, username, password, dialogBinding, null)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
-                    // Remove trailing slash for consistency
-                    val finalPath = cleanPath.trimEnd('/')
+    private fun showEditFolderDialog(
+        dialogBinding: DialogWebdavConfigBinding,
+        currentPath: String,
+        position: Int
+    ) {
+        val url = dialogBinding.urlEditText.text.toString().trim()
+        val username = dialogBinding.usernameEditText.text.toString().trim()
+        val password = dialogBinding.passwordEditText.text.toString()
 
-                    selectedFoldersInDialog.add(finalPath)
+        if (url.isEmpty() || username.isEmpty() || password.isEmpty()) {
+            requireContext().showToast("Please enter server URL, username and password first")
+            return
+        }
+
+        val input = android.widget.EditText(requireContext())
+        input.hint = "/Music"
+        input.setText(currentPath)
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Edit Music Folder")
+            .setMessage("Enter the path to your music folder on the WebDAV server:")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val folderPath = input.text.toString().trim()
+                if (folderPath.isNotEmpty()) {
+                    val finalPath = normalizeFolderPath(folderPath)
+                    selectedFoldersInDialog[position] = finalPath
                     updateFoldersDisplay(dialogBinding)
                 }
             }
             .setNeutralButton("Browse") { _, _ ->
-                // Open folder browser dialog
-                showFolderBrowserDialog(serverUrl, username, password, dialogBinding)
+                // Open folder browser dialog for editing - pass position to replace
+                showFolderBrowserDialog(url, username, password, dialogBinding, position)
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun showDeleteFolderConfirmation(
+        dialogBinding: DialogWebdavConfigBinding,
+        folderPath: String,
+        position: Int
+    ) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Delete Folder")
+            .setMessage("Are you sure you want to remove '$folderPath' from the list?")
+            .setPositiveButton("Delete") { _, _ ->
+                selectedFoldersInDialog.removeAt(position)
+                updateFoldersDisplay(dialogBinding)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun normalizeFolderPath(path: String): String {
+        // Add leading slash if missing
+        val cleanPath = if (!path.startsWith("/")) "/$path" else path
+        // Remove trailing slash for consistency
+        return cleanPath.trimEnd('/')
     }
 
     private fun showFolderBrowserDialog(
         serverUrl: String,
         username: String,
         password: String,
-        dialogBinding: DialogWebdavConfigBinding
+        dialogBinding: DialogWebdavConfigBinding,
+        editPosition: Int?
     ) {
         val browserDialog = WebDAVFolderBrowserDialog.newInstance(
             serverUrl = serverUrl,
             username = username,
             password = password,
-            selectedFolders = selectedFoldersInDialog
+            selectedFolders = selectedFoldersInDialog.toSet()
         ) { selectedPaths ->
-            // Add newly selected folders
-            selectedFoldersInDialog.addAll(selectedPaths)
+            if (editPosition != null && selectedPaths.isNotEmpty()) {
+                // Editing mode: replace the folder at the position with the first selected path
+                selectedFoldersInDialog[editPosition] = selectedPaths.first()
+            } else {
+                // Adding mode: add all newly selected folders
+                for (path in selectedPaths) {
+                    if (!selectedFoldersInDialog.contains(path)) {
+                        selectedFoldersInDialog.add(path)
+                    }
+                }
+            }
             updateFoldersDisplay(dialogBinding)
         }
         browserDialog.show(childFragmentManager, WebDAVFolderBrowserDialog.TAG)
@@ -317,9 +383,7 @@ class WebDAVSettingsFragment : Fragment(),
         }
 
         // Update the folders adapter
-        folderAdapter?.updateFolders(
-            selectedFoldersInDialog.map { WebDAVFile(it, it, true) }
-        )
+        selectedFolderAdapter?.updateFolders(selectedFoldersInDialog.toList())
     }
 
     private fun saveConfig(dialogBinding: DialogWebdavConfigBinding) {
@@ -352,6 +416,7 @@ class WebDAVSettingsFragment : Fragment(),
 
         editingConfig = null
         selectedFoldersInDialog.clear()
+        currentDialogBinding = null
     }
 
     // WebDAVConfigAdapter.Callback implementation

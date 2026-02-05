@@ -54,6 +54,21 @@ class WebDAVFolderBrowserDialog : DialogFragment() {
     private var onFolderSelected: ((Set<String>) -> Unit)? = null
     private var selectedFolders: MutableSet<String> = mutableSetOf()
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Restore arguments from Bundle
+        arguments?.let { args ->
+            serverUrl = args.getString(ARG_SERVER_URL, "")
+            username = args.getString(ARG_USERNAME, "")
+            password = args.getString(ARG_PASSWORD, "")
+            args.getStringArrayList(ARG_SELECTED_FOLDERS)?.let {
+                selectedFolders.clear()
+                selectedFolders.addAll(it)
+            }
+        }
+        android.util.Log.d(TAG, "onCreate: serverUrl=$serverUrl, username=$username, passwordLen=${password.length}")
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -70,6 +85,15 @@ class WebDAVFolderBrowserDialog : DialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         return super.onCreateDialog(savedInstanceState)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Set dialog to near full screen size
+        dialog?.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -136,6 +160,18 @@ class WebDAVFolderBrowserDialog : DialogFragment() {
         scope.launch {
             try {
                 binding.progressBar.isVisible = true
+                binding.emptyView.isVisible = false
+
+                // Log for debugging
+                android.util.Log.d(TAG, "Browsing folder: serverUrl=$serverUrl, username=$username, path=$path")
+
+                if (serverUrl.isEmpty() || username.isEmpty() || password.isEmpty()) {
+                    binding.progressBar.isVisible = false
+                    binding.emptyView.isVisible = true
+                    binding.emptyView.text = "Missing server credentials"
+                    requireContext().showToast("Please fill in server URL, username and password")
+                    return@launch
+                }
 
                 val config = code.name.monkey.retromusic.model.WebDAVConfig(
                     name = "temp",
@@ -144,9 +180,28 @@ class WebDAVFolderBrowserDialog : DialogFragment() {
                     password = password
                 )
 
-                val files = withContext(Dispatchers.IO) {
-                    webDAVClient.listFiles(config, path)
+                val result = withContext(Dispatchers.IO) {
+                    try {
+                        val files = webDAVClient.listFiles(config, path)
+                        Result.success(files)
+                    } catch (e: Exception) {
+                        android.util.Log.e(TAG, "Error listing files", e)
+                        Result.failure(e)
+                    }
                 }
+
+                binding.progressBar.isVisible = false
+
+                if (result.isFailure) {
+                    val error = result.exceptionOrNull()
+                    binding.emptyView.isVisible = true
+                    binding.emptyView.text = "Failed to load: ${error?.message ?: "Unknown error"}"
+                    requireContext().showToast("Failed to load folder: ${error?.message}", Toast.LENGTH_LONG)
+                    return@launch
+                }
+
+                val files = result.getOrDefault(emptyList())
+                android.util.Log.d(TAG, "Got ${files.size} files from server")
 
                 folders.clear()
                 folders.addAll(files)
@@ -161,16 +216,28 @@ class WebDAVFolderBrowserDialog : DialogFragment() {
                     ))
                 }
 
+                android.util.Log.d(TAG, "Folders list now has ${folders.size} items")
+
                 currentPath = path
                 updatePathDisplay()
-                adapter.notifyDataSetChanged()
 
-                binding.progressBar.isVisible = false
-                binding.emptyView.isVisible = files.isEmpty()
+                // Update adapter with new data
+                adapter.updateFolders(folders.toList())
+                android.util.Log.d(TAG, "Called adapter.updateFolders()")
+
+                if (files.isEmpty()) {
+                    binding.emptyView.isVisible = true
+                    binding.emptyView.text = "No folders found"
+                } else {
+                    binding.emptyView.isVisible = false
+                }
 
             } catch (e: Exception) {
                 binding.progressBar.isVisible = false
-                requireContext().showToast("Failed to load folder: ${e.message}")
+                binding.emptyView.isVisible = true
+                binding.emptyView.text = "Error: ${e.message}"
+                requireContext().showToast("Failed to load folder: ${e.message}", Toast.LENGTH_LONG)
+                android.util.Log.e(TAG, "Error browsing folder", e)
             }
         }
     }
@@ -212,6 +279,8 @@ class WebDAVFolderBrowserDialog : DialogFragment() {
         const val ARG_PASSWORD = "password"
         const val ARG_SELECTED_FOLDERS = "selected_folders"
 
+        private var pendingCallback: ((Set<String>) -> Unit)? = null
+
         fun newInstance(
             serverUrl: String,
             username: String,
@@ -219,13 +288,15 @@ class WebDAVFolderBrowserDialog : DialogFragment() {
             selectedFolders: Set<String> = emptySet(),
             onFolderSelected: (Set<String>) -> Unit
         ): WebDAVFolderBrowserDialog {
+            android.util.Log.d(TAG, "newInstance: serverUrl=$serverUrl, username=$username, passwordLen=${password.length}")
+            pendingCallback = onFolderSelected
             return WebDAVFolderBrowserDialog().apply {
-                this.serverUrl = serverUrl
-                this.username = username
-                this.password = password
-                this.selectedFolders.clear()
-                this.selectedFolders.addAll(selectedFolders)
-                // Pass the callback directly - confirmSelection() will invoke it with the correct folders
+                arguments = Bundle().apply {
+                    putString(ARG_SERVER_URL, serverUrl)
+                    putString(ARG_USERNAME, username)
+                    putString(ARG_PASSWORD, password)
+                    putStringArrayList(ARG_SELECTED_FOLDERS, ArrayList(selectedFolders))
+                }
                 this.onFolderSelected = onFolderSelected
             }
         }
