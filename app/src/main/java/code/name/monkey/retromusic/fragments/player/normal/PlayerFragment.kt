@@ -36,6 +36,8 @@ import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.ViewUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
 import code.name.monkey.retromusic.views.DrawableGradient
+import androidx.navigation.findNavController
+import androidx.navigation.navOptions
 
 class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     SharedPreferences.OnSharedPreferenceChangeListener {
@@ -119,10 +121,11 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         setUpSubFragments()
         setUpPlayerToolbar()
         startOrStopSnow(PreferenceUtil.isSnowFalling)
+        updateLyricsIcon()
 
         PreferenceManager.getDefaultSharedPreferences(requireContext())
             .registerOnSharedPreferenceChangeListener(this)
-        playerToolbar().drawAboveSystemBars()
+        binding.bottomToolbarContainer?.drawAboveSystemBars()
     }
 
     override fun onDestroyView() {
@@ -149,6 +152,41 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
             binding.playerToolbar,
             colorControlNormal(),
             requireActivity()
+        )
+
+        // Setup bottom toolbar buttons
+        binding.actionLyrics?.setOnClickListener {
+            toggleLyrics()
+        }
+        binding.actionQueue?.setOnClickListener {
+            openQueue()
+        }
+    }
+
+    private fun toggleLyrics() {
+        PreferenceUtil.showLyrics = !PreferenceUtil.showLyrics
+        updateLyricsIcon()
+        if (PreferenceUtil.lyricsScreenOn && PreferenceUtil.showLyrics) {
+            mainActivity.keepScreenOn(true)
+        } else if (!PreferenceUtil.isScreenOnEnabled && !PreferenceUtil.showLyrics) {
+            mainActivity.keepScreenOn(false)
+        }
+    }
+
+    private fun updateLyricsIcon() {
+        val icon = if (PreferenceUtil.showLyrics) {
+            R.drawable.ic_lyrics
+        } else {
+            R.drawable.ic_lyrics_outline
+        }
+        binding.actionLyrics?.setImageResource(icon)
+    }
+
+    private fun openQueue() {
+        requireActivity().findNavController(R.id.fragment_container).navigate(
+            R.id.playing_queue_fragment,
+            null,
+            navOptions { launchSingleTop = true }
         )
     }
 

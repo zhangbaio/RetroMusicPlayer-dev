@@ -55,24 +55,73 @@
         android:name="code.name.monkey.retromusic.fragments.player.normal.PlayerPlaybackControlsFragment"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toTopOf="@id/playerToolbar"
+        app:layout_constraintBottom_toTopOf="@id/bottomToolbarContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/playerAlbumCoverFragment"
         tools:layout="@layout/fragment_player_playback_controls" />
 
 
+    <!-- Bottom toolbar with lyrics aligned to previous button, queue aligned to next button -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/bottomToolbarContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingVertical="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/actionLyrics"
+            android:layout_width="72dp"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:scaleType="center"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/spacer"
+            app:layout_constraintHorizontal_chainStyle="spread"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_lyrics_outline"
+            app:tint="?attr/colorControlNormal"
+            tools:ignore="ContentDescription" />
+
+        <View
+            android:id="@+id/spacer"
+            android:layout_width="80dp"
+            android:layout_height="1dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/actionQueue"
+            app:layout_constraintStart_toEndOf="@+id/actionLyrics"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/actionQueue"
+            android:layout_width="72dp"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:scaleType="center"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/spacer"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_queue_music"
+            app:tint="?attr/colorControlNormal"
+            tools:ignore="ContentDescription" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Hidden toolbar for compatibility -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/playerToolbar"
         style="@style/Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_height="1dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/bottomToolbarContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/playbackControlsFragment"
-        app:title="@null"
-        tools:menu="@menu/menu_player" />
+        app:title="@null" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -14,11 +14,14 @@
  */
 package code.name.monkey.retromusic.fragments.player.normal
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.ImageButton
+import android.widget.PopupMenu
 import android.widget.TextView
+import androidx.lifecycle.lifecycleScope
 import code.name.monkey.appthemehelper.util.ATHUtil
 import code.name.monkey.appthemehelper.util.ColorUtil
 import code.name.monkey.appthemehelper.util.MaterialValueHelper
@@ -30,15 +33,24 @@ import code.name.monkey.retromusic.fragments.base.AbsPlayerControlsFragment
 import code.name.monkey.retromusic.fragments.base.goToAlbum
 import code.name.monkey.retromusic.fragments.base.goToArtist
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
+import code.name.monkey.retromusic.repository.Repository
+import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
 import com.google.android.material.slider.Slider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.koin.android.ext.android.inject
 
 class PlayerPlaybackControlsFragment :
     AbsPlayerControlsFragment(R.layout.fragment_player_playback_controls) {
 
     private var _binding: FragmentPlayerPlaybackControlsBinding? = null
     private val binding get() = _binding!!
+
+    private val repository: Repository by inject()
+    private var isFavorite = false
 
     override val progressSlider: Slider
         get() = binding.progressSlider
@@ -74,6 +86,16 @@ class PlayerPlaybackControlsFragment :
         binding.text.setOnClickListener {
             goToArtist(requireActivity())
         }
+
+        // Setup favorite button
+        binding.songFavourite.setOnClickListener {
+            toggleFavorite()
+        }
+
+        // Setup menu button
+        binding.songMenu.setOnClickListener { view ->
+            showSongMenu(view)
+        }
     }
 
     override fun setColor(color: MediaNotificationProcessor) {
@@ -96,15 +118,10 @@ class PlayerPlaybackControlsFragment :
             accentColor()
         }.ripAlpha()
 
-        TintHelper.setTintAuto(
-            binding.playPauseButton,
-            MaterialValueHelper.getPrimaryTextColor(
-                requireContext(),
-                ColorUtil.isColorLight(colorFinal)
-            ),
-            false
-        )
-        TintHelper.setTintAuto(binding.playPauseButton, colorFinal, true)
+        // Tint playback control icons
+        binding.playPauseButton.setColorFilter(lastPlaybackControlsColor)
+        binding.previousButton.setColorFilter(lastPlaybackControlsColor)
+        binding.nextButton.setColorFilter(lastPlaybackControlsColor)
         binding.progressSlider.applyColor(colorFinal)
         volumeFragment?.setTintable(colorFinal)
         updateRepeatState()
@@ -131,11 +148,13 @@ class PlayerPlaybackControlsFragment :
         updateRepeatState()
         updateShuffleState()
         updateSong()
+        updateFavoriteState()
     }
 
     override fun onPlayingMetaChanged() {
         super.onPlayingMetaChanged()
         updateSong()
+        updateFavoriteState()
     }
 
     override fun onPlayStateChanged() {
@@ -163,9 +182,9 @@ class PlayerPlaybackControlsFragment :
 
     private fun updatePlayPauseDrawableState() {
         if (MusicPlayerRemote.isPlaying) {
-            binding.playPauseButton.setImageResource(R.drawable.ic_pause)
+            binding.playPauseButton.setImageResource(R.drawable.ic_pause_large)
         } else {
-            binding.playPauseButton.setImageResource(R.drawable.ic_play_arrow)
+            binding.playPauseButton.setImageResource(R.drawable.ic_play_arrow_large)
         }
     }
 
@@ -189,5 +208,70 @@ class PlayerPlaybackControlsFragment :
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    private fun toggleFavorite() {
+        val song = MusicPlayerRemote.currentSong
+        lifecycleScope.launch(Dispatchers.IO) {
+            MusicUtil.toggleFavorite(song)
+            val newFavoriteState = MusicUtil.isFavorite(song)
+            withContext(Dispatchers.Main) {
+                isFavorite = newFavoriteState
+                updateFavoriteIcon()
+            }
+        }
+    }
+
+    private fun updateFavoriteState() {
+        val song = MusicPlayerRemote.currentSong
+        lifecycleScope.launch(Dispatchers.IO) {
+            val favorite = MusicUtil.isFavorite(song)
+            withContext(Dispatchers.Main) {
+                isFavorite = favorite
+                updateFavoriteIcon()
+            }
+        }
+    }
+
+    private fun updateFavoriteIcon() {
+        val icon = if (isFavorite) {
+            R.drawable.ic_favorite
+        } else {
+            R.drawable.ic_favorite_border
+        }
+        binding.songFavourite.setImageResource(icon)
+    }
+
+    private fun showSongMenu(view: View) {
+        val popup = PopupMenu(requireContext(), view)
+        popup.menuInflater.inflate(R.menu.menu_song_detail, popup.menu)
+        popup.setOnMenuItemClickListener { item ->
+            val song = MusicPlayerRemote.currentSong
+            when (item.itemId) {
+                R.id.action_add_to_playlist -> {
+                    // Add to playlist - handled by parent activity
+                    true
+                }
+                R.id.action_share -> {
+                    requireActivity().startActivity(
+                        Intent.createChooser(
+                            MusicUtil.createShareSongFileIntent(requireContext(), song),
+                            null
+                        )
+                    )
+                    true
+                }
+                R.id.action_go_to_album -> {
+                    goToAlbum(requireActivity())
+                    true
+                }
+                R.id.action_go_to_artist -> {
+                    goToArtist(requireActivity())
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
     }
 }
