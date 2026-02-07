@@ -28,9 +28,12 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import code.name.monkey.appthemehelper.util.ToolbarContentTintHelper
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.SNOWFALL
+import code.name.monkey.retromusic.adapter.song.PlayingQueueAdapter
 import code.name.monkey.retromusic.databinding.FragmentPlayerBinding
 import code.name.monkey.retromusic.extensions.*
 import code.name.monkey.retromusic.fragments.base.AbsPlayerFragment
@@ -39,6 +42,7 @@ import code.name.monkey.retromusic.glide.RetroGlideExtension
 import code.name.monkey.retromusic.glide.RetroGlideExtension.songCoverOptions
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.model.Song
+import code.name.monkey.retromusic.service.MusicService
 import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.ViewUtil
@@ -47,6 +51,10 @@ import code.name.monkey.retromusic.views.DrawableGradient
 import androidx.navigation.findNavController
 import androidx.navigation.navOptions
 import com.bumptech.glide.Glide
+import com.h6ah4i.android.widget.advrecyclerview.animator.DraggableItemAnimator
+import com.h6ah4i.android.widget.advrecyclerview.draggable.RecyclerViewDragDropManager
+import com.h6ah4i.android.widget.advrecyclerview.touchguard.RecyclerViewTouchActionGuardManager
+import com.h6ah4i.android.widget.advrecyclerview.utils.WrapperAdapterUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,6 +78,14 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     private var isFavorite = false
     private var fullscreenHandler: Handler? = null
     private var fullscreenRunnable: Runnable? = null
+
+    // Inline queue mode
+    private var isQueueMode = false
+    private var playingQueueAdapter: PlayingQueueAdapter? = null
+    private var wrappedAdapter: RecyclerView.Adapter<*>? = null
+    private var recyclerViewDragDropManager: RecyclerViewDragDropManager? = null
+    private var recyclerViewTouchActionGuardManager: RecyclerViewTouchActionGuardManager? = null
+    private var queueLayoutManager: LinearLayoutManager? = null
 
     companion object {
         private const val FULLSCREEN_DELAY = 3000L // 3 seconds
@@ -373,9 +389,15 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         return true
     }
 
+    override fun onPause() {
+        recyclerViewDragDropManager?.cancelDrag()
+        super.onPause()
+    }
+
     override fun onDestroyView() {
         stopFullscreenTimer()
         fullscreenHandler = null
+        releaseQueueResources()
         super.onDestroyView()
         PreferenceManager.getDefaultSharedPreferences(requireContext())
             .unregisterOnSharedPreferenceChangeListener(this)
@@ -406,7 +428,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
             toggleLyrics()
         }
         binding.actionQueue?.setOnClickListener {
-            openQueue()
+            toggleQueueMode()
         }
     }
 
@@ -427,6 +449,10 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     }
 
     private fun enterLyricsMode() {
+        // 如果在队列模式下，先退出队列
+        if (isQueueMode) {
+            exitQueueMode()
+        }
         isLyricsMode = true
         // 显示歌曲头部信息（小专辑图+歌名+歌手+收藏+更多）
         binding.songHeaderContainer?.isVisible = true
@@ -479,12 +505,190 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         )
     }
 
-    private fun openQueue() {
-        requireActivity().findNavController(R.id.fragment_container).navigate(
-            R.id.playing_queue_fragment,
-            null,
-            navOptions { launchSingleTop = true }
+    // ========== Queue Mode ==========
+
+    private fun toggleQueueMode() {
+        if (isQueueMode) {
+            exitQueueMode()
+        } else {
+            enterQueueMode()
+        }
+    }
+
+    private fun enterQueueMode() {
+        // 如果在歌词模式下，先退出歌词
+        if (isLyricsMode) {
+            exitLyricsMode()
+        }
+        isQueueMode = true
+
+        // 显示歌曲头部信息
+        binding.songHeaderContainer?.isVisible = true
+        // 隐藏专辑封面
+        binding.playerAlbumCoverFragment.isVisible = false
+        // 显示队列容器
+        binding.queueContainer?.isVisible = true
+        // 隐藏控制栏中的歌曲信息（标题、歌手、收藏、更多）
+        controlsFragment.setSongInfoVisible(false)
+
+        // 设置 RecyclerView
+        setupQueueRecyclerView()
+        // 更新模式按钮状态
+        updateQueueModeButtons()
+        // 更新区块副标题
+        updateQueueSectionSubtitle()
+        // 更新队列图标
+        updateQueueIcon()
+
+        // 滚动到当前歌曲
+        queueLayoutManager?.scrollToPositionWithOffset(MusicPlayerRemote.position + 1, 0)
+    }
+
+    private fun exitQueueMode() {
+        isQueueMode = false
+
+        // 隐藏歌曲头部信息
+        binding.songHeaderContainer?.isVisible = false
+        // 显示专辑封面
+        binding.playerAlbumCoverFragment.isVisible = true
+        // 隐藏队列容器
+        binding.queueContainer?.isVisible = false
+        // 显示控制栏中的歌曲信息
+        controlsFragment.setSongInfoVisible(true)
+
+        // 更新队列图标
+        updateQueueIcon()
+
+        // 释放拖拽资源
+        releaseQueueResources()
+    }
+
+    private fun setupQueueRecyclerView() {
+        val recyclerView = binding.queueRecyclerView ?: return
+
+        recyclerViewTouchActionGuardManager = RecyclerViewTouchActionGuardManager()
+        recyclerViewDragDropManager = RecyclerViewDragDropManager()
+
+        playingQueueAdapter = PlayingQueueAdapter(
+            requireActivity(),
+            MusicPlayerRemote.playingQueue.toMutableList(),
+            MusicPlayerRemote.position,
+            R.layout.item_queue
         )
+        wrappedAdapter = recyclerViewDragDropManager?.createWrappedAdapter(playingQueueAdapter!!)
+
+        queueLayoutManager = LinearLayoutManager(requireContext())
+
+        recyclerView.apply {
+            layoutManager = queueLayoutManager
+            adapter = wrappedAdapter
+            itemAnimator = DraggableItemAnimator()
+            recyclerViewTouchActionGuardManager?.attachRecyclerView(this)
+            recyclerViewDragDropManager?.attachRecyclerView(this)
+        }
+    }
+
+    private fun updateQueueModeButtons() {
+        // Shuffle 按钮
+        val shuffleMode = MusicPlayerRemote.shuffleMode
+        val isShuffleOn = shuffleMode == MusicService.SHUFFLE_MODE_SHUFFLE
+        binding.queueShuffleButton?.let { btn ->
+            btn.text = getString(R.string.shuffle)
+            btn.alpha = if (isShuffleOn) 1.0f else 0.5f
+            btn.setOnClickListener {
+                MusicPlayerRemote.toggleShuffleMode()
+            }
+        }
+
+        // Repeat 按钮
+        val repeatMode = MusicPlayerRemote.repeatMode
+        binding.queueRepeatButton?.let { btn ->
+            when (repeatMode) {
+                MusicService.REPEAT_MODE_NONE -> {
+                    btn.setIconResource(R.drawable.ic_repeat)
+                    btn.text = getString(R.string.action_cycle_repeat)
+                    btn.alpha = 0.5f
+                }
+                MusicService.REPEAT_MODE_ALL -> {
+                    btn.setIconResource(R.drawable.ic_repeat)
+                    btn.text = getString(R.string.action_cycle_repeat)
+                    btn.alpha = 1.0f
+                }
+                MusicService.REPEAT_MODE_THIS -> {
+                    btn.setIconResource(R.drawable.ic_repeat_one)
+                    btn.text = getString(R.string.action_cycle_repeat)
+                    btn.alpha = 1.0f
+                }
+            }
+            btn.setOnClickListener {
+                MusicPlayerRemote.cycleRepeatMode()
+            }
+        }
+
+        // Autoplay 按钮
+        binding.queueAutoplayButton?.let { btn ->
+            btn.text = getString(R.string.action_toggle_autoplay)
+            btn.alpha = 0.5f
+            btn.setOnClickListener {
+                // TODO: implement autoplay toggle
+            }
+        }
+    }
+
+    private fun updateQueueSectionSubtitle() {
+        val queue = MusicPlayerRemote.playingQueue
+        val position = MusicPlayerRemote.position
+        val remaining = queue.size - position - 1
+        val duration = MusicPlayerRemote.getQueueDurationMillis(position)
+        binding.queueSectionSubtitle?.text = MusicUtil.buildInfoString(
+            resources.getQuantityString(R.plurals.albumSongs, remaining, remaining),
+            MusicUtil.getReadableDurationString(duration)
+        )
+    }
+
+    private fun updateQueueIcon() {
+        val icon = if (isQueueMode) {
+            R.drawable.ic_queue_music
+        } else {
+            R.drawable.ic_queue_music
+        }
+        binding.actionQueue?.setImageDrawable(
+            requireContext().getDrawable(icon)
+        )
+        // 用 alpha 来表示激活状态
+        binding.actionQueue?.alpha = if (isQueueMode) 1.0f else 0.7f
+    }
+
+    private fun updateInlineQueue() {
+        if (!isQueueMode) return
+        playingQueueAdapter?.swapDataSet(
+            MusicPlayerRemote.playingQueue,
+            MusicPlayerRemote.position
+        )
+        updateQueueSectionSubtitle()
+    }
+
+    private fun updateInlineQueuePosition() {
+        if (!isQueueMode) return
+        playingQueueAdapter?.setCurrent(MusicPlayerRemote.position)
+        binding.queueRecyclerView?.stopScroll()
+        queueLayoutManager?.scrollToPositionWithOffset(MusicPlayerRemote.position + 1, 0)
+        updateQueueSectionSubtitle()
+    }
+
+    private fun releaseQueueResources() {
+        recyclerViewDragDropManager?.cancelDrag()
+        recyclerViewDragDropManager?.release()
+        recyclerViewDragDropManager = null
+
+        recyclerViewTouchActionGuardManager = null
+
+        if (wrappedAdapter != null) {
+            WrapperAdapterUtils.releaseAll(wrappedAdapter)
+            wrappedAdapter = null
+        }
+        playingQueueAdapter = null
+        queueLayoutManager = null
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String?) {
@@ -511,11 +715,40 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         if (isLyricsMode && MusicPlayerRemote.isPlaying) {
             startFullscreenTimer()
         }
+        if (isQueueMode) {
+            updateInlineQueue()
+            updateQueueModeButtons()
+        }
     }
 
     override fun onPlayingMetaChanged() {
         updateIsFavorite()
         updateHeaderInfo()
+        if (isQueueMode) {
+            updateInlineQueuePosition()
+        }
+    }
+
+    override fun onQueueChanged() {
+        super.onQueueChanged()
+        if (isQueueMode) {
+            updateInlineQueue()
+        }
+    }
+
+    override fun onShuffleModeChanged() {
+        super.onShuffleModeChanged()
+        if (isQueueMode) {
+            updateQueueModeButtons()
+            updateInlineQueue()
+        }
+    }
+
+    override fun onRepeatModeChanged() {
+        super.onRepeatModeChanged()
+        if (isQueueMode) {
+            updateQueueModeButtons()
+        }
     }
 
     override fun onPlayStateChanged() {
