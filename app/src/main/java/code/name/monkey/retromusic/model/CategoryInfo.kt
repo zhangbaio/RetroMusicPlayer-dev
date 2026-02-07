@@ -32,12 +32,12 @@ data class CategoryInfo(
     ) {
         Home(R.id.action_home, R.string.for_you, R.drawable.asld_face),
         Songs(R.id.action_song, R.string.songs, R.drawable.asld_music_note),
+        Database(R.id.action_database, R.string.database, R.drawable.ic_library_music),
         Albums(R.id.action_album, R.string.albums, R.drawable.asld_album),
         Artists(R.id.action_artist, R.string.artists, R.drawable.asld_artist),
         Playlists(R.id.action_playlist, R.string.playlists, R.drawable.asld_playlist),
         Genres(R.id.action_genre, R.string.genres, R.drawable.asld_guitar),
         Folder(R.id.action_folder, R.string.folders, R.drawable.asld_folder),
-        WebDAV(R.id.webdav_songs_fragment, R.string.webdav_songs, R.drawable.ic_cloud),
         Search(R.id.action_search, R.string.action_search, R.drawable.ic_search);
     }
 }

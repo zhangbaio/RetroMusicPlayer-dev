@@ -248,6 +248,9 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
                 binding.headerFavourite?.setImageDrawable(
                     requireContext().getDrawable(icon)
                 )
+                if (::controlsFragment.isInitialized) {
+                    controlsFragment.updateFavoriteIcon(isFavorite)
+                }
             }
         }
     }
@@ -729,6 +732,11 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         if (isQueueMode) {
             updateInlineQueuePosition()
         }
+    }
+
+    override fun onFavoriteStateChanged() {
+        super.onFavoriteStateChanged()
+        updateHeaderFavoriteIcon()
     }
 
     override fun onQueueChanged() {

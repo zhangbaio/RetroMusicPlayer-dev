@@ -20,6 +20,11 @@
         tools:layout="@layout/fragment_main_recycler" />
 
     <fragment
+        android:id="@+id/action_database"
+        android:name="code.name.monkey.retromusic.fragments.database.DatabaseFragment"
+        tools:layout="@layout/fragment_database" />
+
+    <fragment
         android:id="@+id/action_genre"
         android:name="code.name.monkey.retromusic.fragments.genres.GenresFragment"
         tools:layout="@layout/fragment_main_recycler" />
@@ -33,12 +38,6 @@
         android:id="@+id/action_folder"
         android:name="code.name.monkey.retromusic.fragments.folder.FoldersFragment"
         tools:layout="@layout/fragment_folder" />
-
-    <fragment
-        android:id="@+id/webdav_songs_fragment"
-        android:name="code.name.monkey.retromusic.fragments.webdav.WebDAVSongsFragment"
-        android:label="@string/webdav_songs"
-        tools:layout="@layout/fragment_webdav_songs" />
 
     <fragment
         android:id="@+id/action_home"

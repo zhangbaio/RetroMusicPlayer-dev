@@ -79,6 +79,8 @@
     <string name="app_widget_text_name">极简文字</string>
     <string name="artist">艺术家</string>
     <string name="artists">艺术家</string>
+    <string name="database">资料库</string>
+    <string name="database_content">资料库内容</string>
     <string name="audio_fade_duration">音乐淡入淡出时长</string>
     <string name="audio_focus_denied">音频焦点丢失。</string>
     <string name="audio_settings_summary">更改声音设置或调整均衡器</string>

@@ -41,6 +41,7 @@ import code.name.monkey.retromusic.CIRCLE_PLAY_BUTTON
 import code.name.monkey.retromusic.COLORED_APP_SHORTCUTS
 import code.name.monkey.retromusic.CROSS_FADE_DURATION
 import code.name.monkey.retromusic.CUSTOM_FONT
+import code.name.monkey.retromusic.DATABASE_CATEGORIES
 import code.name.monkey.retromusic.DESATURATED_COLOR
 import code.name.monkey.retromusic.ENABLE_SEARCH_PLAYLIST
 import code.name.monkey.retromusic.EXPAND_NOW_PLAYING_PANEL
@@ -129,7 +130,6 @@ import code.name.monkey.retromusic.util.theme.ThemeMode
 import code.name.monkey.retromusic.views.TopAppBarLayout
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
 import java.io.File
 
@@ -140,13 +140,88 @@ object PreferenceUtil {
     val defaultCategories = listOf(
         CategoryInfo(CategoryInfo.Category.Home, true),
         CategoryInfo(CategoryInfo.Category.Songs, true),
-        CategoryInfo(CategoryInfo.Category.Albums, true),
-        CategoryInfo(CategoryInfo.Category.Artists, true),
-        CategoryInfo(CategoryInfo.Category.Playlists, true),
+        CategoryInfo(CategoryInfo.Category.Database, true),
+        CategoryInfo(CategoryInfo.Category.Albums, false),
+        CategoryInfo(CategoryInfo.Category.Artists, false),
+        CategoryInfo(CategoryInfo.Category.Playlists, false),
         CategoryInfo(CategoryInfo.Category.Genres, false),
         CategoryInfo(CategoryInfo.Category.Folder, false),
         CategoryInfo(CategoryInfo.Category.Search, false)
     )
+
+    private val defaultDatabaseCategories = listOf(
+        CategoryInfo(CategoryInfo.Category.Playlists, true),
+        CategoryInfo(CategoryInfo.Category.Artists, true),
+        CategoryInfo(CategoryInfo.Category.Albums, true),
+        CategoryInfo(CategoryInfo.Category.Songs, true)
+    )
+
+    private fun defaultCategory(category: CategoryInfo.Category): CategoryInfo {
+        return when (category) {
+            CategoryInfo.Category.Home -> CategoryInfo(category, true)
+            CategoryInfo.Category.Songs -> CategoryInfo(category, true)
+            CategoryInfo.Category.Database -> CategoryInfo(category, true)
+            else -> CategoryInfo(category, false)
+        }
+    }
+
+    private fun normalizeCategories(categories: List<CategoryInfo>): List<CategoryInfo> {
+        val needsDatabaseMigration = categories.none { it.category == CategoryInfo.Category.Database }
+        val visibilityMap = mutableMapOf<CategoryInfo.Category, Boolean>()
+        categories.forEach { visibilityMap[it.category] = it.visible }
+        if (needsDatabaseMigration) {
+            visibilityMap[CategoryInfo.Category.Database] = true
+            visibilityMap[CategoryInfo.Category.Albums] = false
+            visibilityMap[CategoryInfo.Category.Artists] = false
+            visibilityMap[CategoryInfo.Category.Playlists] = false
+        }
+        val orderedCategories = listOf(
+            CategoryInfo.Category.Home,
+            CategoryInfo.Category.Songs,
+            CategoryInfo.Category.Database,
+            CategoryInfo.Category.Albums,
+            CategoryInfo.Category.Artists,
+            CategoryInfo.Category.Playlists,
+            CategoryInfo.Category.Genres,
+            CategoryInfo.Category.Folder,
+            CategoryInfo.Category.Search
+        )
+        val normalized = orderedCategories.map { category ->
+            CategoryInfo(
+                category = category,
+                visible = visibilityMap[category] ?: defaultCategory(category).visible
+            )
+        }.toMutableList()
+
+        if (normalized.none { it.visible }) {
+            normalized.firstOrNull { it.category == CategoryInfo.Category.Database }?.visible = true
+        }
+        return normalized
+    }
+
+    private fun normalizeDatabaseCategories(categories: List<CategoryInfo>): List<CategoryInfo> {
+        val allowedCategories = listOf(
+            CategoryInfo.Category.Playlists,
+            CategoryInfo.Category.Artists,
+            CategoryInfo.Category.Albums,
+            CategoryInfo.Category.Songs
+        )
+        val uniqueOrdered = categories
+            .filter { it.category in allowedCategories }
+            .distinctBy { it.category }
+            .toMutableList()
+        val existing = uniqueOrdered.map { it.category }.toSet()
+        allowedCategories.forEach { category ->
+            if (category !in existing) {
+                uniqueOrdered.add(CategoryInfo(category, true))
+            }
+        }
+        val normalized = uniqueOrdered.toMutableList()
+        if (normalized.none { it.visible }) {
+            normalized.firstOrNull { it.category == CategoryInfo.Category.Songs }?.visible = true
+        }
+        return normalized
+    }
 
     var libraryCategory: List<CategoryInfo>
         get() {
@@ -158,16 +233,38 @@ object PreferenceUtil {
                 gson.toJson(defaultCategories, collectionType)
             )
             return try {
-                Gson().fromJson(data, collectionType)
-            } catch (e: JsonSyntaxException) {
+                normalizeCategories(Gson().fromJson(data, collectionType))
+            } catch (e: Exception) {
                 e.printStackTrace()
-                return defaultCategories
+                return normalizeCategories(defaultCategories)
             }
         }
         set(value) {
             val collectionType = object : TypeToken<List<CategoryInfo?>?>() {}.type
             sharedPreferences.edit {
                 putString(LIBRARY_CATEGORIES, Gson().toJson(value, collectionType))
+            }
+        }
+
+    var databaseCategory: List<CategoryInfo>
+        get() {
+            val gson = Gson()
+            val collectionType = object : TypeToken<List<CategoryInfo>>() {}.type
+            val data = sharedPreferences.getStringOrDefault(
+                DATABASE_CATEGORIES,
+                gson.toJson(defaultDatabaseCategories, collectionType)
+            )
+            return try {
+                normalizeDatabaseCategories(gson.fromJson(data, collectionType))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                normalizeDatabaseCategories(defaultDatabaseCategories)
+            }
+        }
+        set(value) {
+            val collectionType = object : TypeToken<List<CategoryInfo?>?>() {}.type
+            sharedPreferences.edit {
+                putString(DATABASE_CATEGORIES, Gson().toJson(value, collectionType))
             }
         }
 

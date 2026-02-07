@@ -151,37 +151,56 @@ class AutoMusicProvider(
     private fun getRootChildren(resources: Resources): List<MediaBrowserCompat.MediaItem> {
         val mediaItems: MutableList<MediaBrowserCompat.MediaItem> = ArrayList()
         val libraryCategories = PreferenceUtil.libraryCategory
+
+        fun addAlbumsRootItem() {
+            mediaItems.add(
+                AutoMediaItem.with(mContext)
+                    .asBrowsable()
+                    .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_ALBUM)
+                    .gridLayout(true)
+                    .icon(R.drawable.ic_album)
+                    .title(resources.getString(R.string.albums)).build()
+            )
+        }
+
+        fun addArtistsRootItem() {
+            if (PreferenceUtil.albumArtistsOnly) {
+                mediaItems.add(
+                    AutoMediaItem.with(mContext)
+                        .asBrowsable()
+                        .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_ALBUM_ARTIST)
+                        .icon(R.drawable.ic_album_artist)
+                        .title(resources.getString(R.string.album_artist)).build()
+                )
+            } else {
+                mediaItems.add(
+                    AutoMediaItem.with(mContext)
+                        .asBrowsable()
+                        .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_ARTIST)
+                        .icon(R.drawable.ic_artist)
+                        .title(resources.getString(R.string.artists)).build()
+                )
+            }
+        }
+
+        fun addPlaylistsRootItem() {
+            mediaItems.add(
+                AutoMediaItem.with(mContext)
+                    .asBrowsable()
+                    .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_PLAYLIST)
+                    .icon(R.drawable.ic_playlist_play)
+                    .title(resources.getString(R.string.playlists)).build()
+            )
+        }
+
         libraryCategories.forEach {
             if (it.visible) {
                 when (it.category) {
                     CategoryInfo.Category.Albums -> {
-                        mediaItems.add(
-                            AutoMediaItem.with(mContext)
-                                .asBrowsable()
-                                .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_ALBUM)
-                                .gridLayout(true)
-                                .icon(R.drawable.ic_album)
-                                .title(resources.getString(R.string.albums)).build()
-                        )
+                        addAlbumsRootItem()
                     }
                     CategoryInfo.Category.Artists -> {
-                        if (PreferenceUtil.albumArtistsOnly) {
-                            mediaItems.add(
-                                AutoMediaItem.with(mContext)
-                                    .asBrowsable()
-                                    .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_ALBUM_ARTIST)
-                                    .icon(R.drawable.ic_album_artist)
-                                    .title(resources.getString(R.string.album_artist)).build()
-                            )
-                        } else {
-                            mediaItems.add(
-                                AutoMediaItem.with(mContext)
-                                    .asBrowsable()
-                                    .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_ARTIST)
-                                    .icon(R.drawable.ic_artist)
-                                    .title(resources.getString(R.string.artists)).build()
-                            )
-                        }
+                        addArtistsRootItem()
                     }
                     CategoryInfo.Category.Genres -> {
                         mediaItems.add(
@@ -193,13 +212,12 @@ class AutoMusicProvider(
                         )
                     }
                     CategoryInfo.Category.Playlists -> {
-                        mediaItems.add(
-                            AutoMediaItem.with(mContext)
-                                .asBrowsable()
-                                .path(AutoMediaIDHelper.MEDIA_ID_MUSICS_BY_PLAYLIST)
-                                .icon(R.drawable.ic_playlist_play)
-                                .title(resources.getString(R.string.playlists)).build()
-                        )
+                        addPlaylistsRootItem()
+                    }
+                    CategoryInfo.Category.Database -> {
+                        addPlaylistsRootItem()
+                        addArtistsRootItem()
+                        addAlbumsRootItem()
                     }
                     else -> {
                     }

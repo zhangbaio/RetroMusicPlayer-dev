@@ -30,10 +30,11 @@ import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.SwipeAndDragHelper
 import code.name.monkey.retromusic.util.SwipeAndDragHelper.ActionCompletionContract
 
-class CategoryInfoAdapter : RecyclerView.Adapter<CategoryInfoAdapter.ViewHolder>(),
-    ActionCompletionContract {
+class CategoryInfoAdapter(
+    initialCategoryInfos: MutableList<CategoryInfo> = PreferenceUtil.libraryCategory.toMutableList()
+) : RecyclerView.Adapter<CategoryInfoAdapter.ViewHolder>(), ActionCompletionContract {
     var categoryInfos: MutableList<CategoryInfo> =
-        PreferenceUtil.libraryCategory.toMutableList()
+        initialCategoryInfos
         @SuppressLint("NotifyDataSetChanged")
         set(value) {
             field = value
