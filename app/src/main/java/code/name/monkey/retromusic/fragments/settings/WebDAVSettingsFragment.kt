@@ -24,6 +24,7 @@ import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import code.name.monkey.retromusic.R
+import code.name.monkey.retromusic.activities.base.AbsSlidingMusicPanelActivity
 import code.name.monkey.retromusic.adapters.SelectedFolderAdapter
 import code.name.monkey.retromusic.adapters.WebDAVConfigAdapter
 import code.name.monkey.retromusic.databinding.DialogWebdavConfigBinding
@@ -67,12 +68,17 @@ class WebDAVSettingsFragment : Fragment(),
     }
 
     override fun onDestroyView() {
+        // 恢复底部播放栏
+        (activity as? AbsSlidingMusicPanelActivity)?.hideBottomSheet(hide = false)
         super.onDestroyView()
         _binding = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // 隐藏底部播放栏
+        (activity as? AbsSlidingMusicPanelActivity)?.hideBottomSheet(hide = true)
 
         setupRecyclerView()
         setupFab()
@@ -188,6 +194,14 @@ class WebDAVSettingsFragment : Fragment(),
 
         configDialog = dialog
         dialog.show()
+
+        // 让弹窗靠上显示，避免被键盘遮挡
+        dialog.window?.let { window ->
+            val params = window.attributes
+            params.gravity = android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL
+            params.y = 100
+            window.attributes = params
+        }
     }
 
     private fun setupFoldersRecyclerView(dialogBinding: DialogWebdavConfigBinding) {
