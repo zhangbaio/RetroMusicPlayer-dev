@@ -51,8 +51,9 @@ object RetroGlideExtension {
     private val DEFAULT_ERROR_IMAGE_BANNER
         get() = R.drawable.material_design_default
 
-    private val DEFAULT_DISK_CACHE_STRATEGY_ARTIST = DiskCacheStrategy.RESOURCE
-    private val DEFAULT_DISK_CACHE_STRATEGY = DiskCacheStrategy.NONE
+    // Persist covers/artists to local disk cache to speed up repeated loads.
+    private val DEFAULT_DISK_CACHE_STRATEGY_ARTIST = DiskCacheStrategy.AUTOMATIC
+    private val DEFAULT_DISK_CACHE_STRATEGY = DiskCacheStrategy.AUTOMATIC
 
     private const val DEFAULT_ANIMATION = android.R.anim.fade_in
     private val WEBDAV_COVER_FILE_NAMES = listOf(
