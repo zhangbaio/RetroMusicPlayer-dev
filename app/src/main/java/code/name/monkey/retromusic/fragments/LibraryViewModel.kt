@@ -94,7 +94,13 @@ class LibraryViewModel(
     fun getFabMargin(): LiveData<Int> = fabMargin
 
     private suspend fun fetchSongs() {
-        songs.postValue(repository.allSongs())
+        val allSongs = repository.allSongs()
+        val visibleSongs = if (PreferenceUtil.isLocalSongsBootstrapRunning) {
+            allSongs.filter { it.sourceType == SourceType.WEBDAV }
+        } else {
+            allSongs
+        }
+        songs.postValue(visibleSongs)
     }
 
     private suspend fun fetchAlbums() {

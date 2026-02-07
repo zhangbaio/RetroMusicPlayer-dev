@@ -15,16 +15,20 @@
 package code.name.monkey.retromusic.activities
 
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.webkit.MimeTypeMap
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.contains
 import androidx.navigation.ui.setupWithNavController
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.activities.base.AbsCastActivity
 import code.name.monkey.retromusic.extensions.*
+import code.name.monkey.retromusic.fragments.ReloadType
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.helper.SearchQueryHelper.getSongs
 import code.name.monkey.retromusic.interfaces.IScrollHelper
@@ -33,18 +37,38 @@ import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.repository.PlaylistSongsLoader
 import code.name.monkey.retromusic.repository.WebDAVRepository
 import code.name.monkey.retromusic.service.MusicService
+import code.name.monkey.retromusic.util.FileUtil
 import code.name.monkey.retromusic.util.AppRater
 import code.name.monkey.retromusic.util.PreferenceUtil
+import code.name.monkey.retromusic.util.getExternalStoragePublicDirectory
 import code.name.monkey.retromusic.util.logE
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.android.ext.android.get
+import java.io.File
+import java.io.FileFilter
+import java.util.LinkedHashSet
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class MainActivity : AbsCastActivity() {
     companion object {
         const val TAG = "MainActivity"
         const val EXPAND_PANEL = "expand_panel"
         private const val WEBDAV_VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000L
+        private const val LOCAL_SCAN_CHUNK_SIZE = 200
+        private const val LOCAL_SCAN_CHUNK_TIMEOUT_MS = 45_000L
+    }
+
+    private val bootstrapAudioFileFilter = FileFilter { file ->
+        !file.isHidden && (
+            file.isDirectory ||
+                FileUtil.fileIsMimeType(file, "audio/*", MimeTypeMap.getSingleton()) ||
+                FileUtil.fileIsMimeType(file, "application/opus", MimeTypeMap.getSingleton()) ||
+                FileUtil.fileIsMimeType(file, "application/ogg", MimeTypeMap.getSingleton())
+            )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,10 +79,109 @@ class MainActivity : AbsCastActivity() {
         AppRater.appLaunched(this)
 
         setupNavigationController()
+        maybeBootstrapLocalSongsOnFirstInstall()
         maybeRunWebDavValidation()
 
         WhatsNewFragment.showChangeLog(this)
     }
+
+    private fun maybeBootstrapLocalSongsOnFirstInstall() {
+        if (!hasPermissions()) return
+
+        val installTime = runCatching {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0).firstInstallTime
+        }.getOrElse { error ->
+            Log.w(TAG, "Unable to resolve install time, skip local songs bootstrap", error)
+            0L
+        }
+        if (installTime <= 0L) return
+        if (PreferenceUtil.localSongsBootstrapInstallTime == installTime) return
+
+        PreferenceUtil.localSongsBootstrapInstallTime = installTime
+        PreferenceUtil.isLocalSongsBootstrapRunning = true
+        libraryViewModel.forceReload(ReloadType.Songs)
+
+        lifecycleScope.launch(IO) {
+            val scannedCount = runCatching {
+                reindexLocalSongsFromFilesystem()
+            }.onFailure { error ->
+                Log.w(TAG, "Local songs bootstrap scan failed", error)
+            }.getOrDefault(0)
+
+            PreferenceUtil.isLocalSongsBootstrapRunning = false
+
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                libraryViewModel.forceReload(ReloadType.Songs)
+                libraryViewModel.forceReload(ReloadType.Albums)
+                libraryViewModel.forceReload(ReloadType.Artists)
+                libraryViewModel.forceReload(ReloadType.HomeSections)
+                libraryViewModel.forceReload(ReloadType.Suggestions)
+            }
+            Log.i(TAG, "Local songs bootstrap finished, scanned files=$scannedCount")
+        }
+    }
+
+    private suspend fun reindexLocalSongsFromFilesystem(): Int {
+        val roots = collectLocalSongScanRoots()
+        if (roots.isEmpty()) return 0
+
+        val audioPaths = LinkedHashSet<String>()
+        roots.forEach { root ->
+            if (root.isDirectory) {
+                FileUtil.listFilesDeep(root, bootstrapAudioFileFilter).forEach { file ->
+                    audioPaths.add(FileUtil.safeGetCanonicalPath(file))
+                }
+            } else if (bootstrapAudioFileFilter.accept(root)) {
+                audioPaths.add(FileUtil.safeGetCanonicalPath(root))
+            }
+        }
+        if (audioPaths.isEmpty()) return 0
+
+        var scanned = 0
+        audioPaths.toList().chunked(LOCAL_SCAN_CHUNK_SIZE).forEach { chunk ->
+            scanned += withTimeoutOrNull(LOCAL_SCAN_CHUNK_TIMEOUT_MS) {
+                scanAudioPathsChunk(chunk)
+            } ?: 0
+        }
+        return scanned
+    }
+
+    private fun collectLocalSongScanRoots(): List<File> {
+        val roots = LinkedHashSet<File>()
+        roots.add(getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC))
+        roots.add(PreferenceUtil.startDirectory)
+        if (PreferenceUtil.saveLastDirectory) {
+            roots.add(PreferenceUtil.lastDirectory)
+        }
+        return roots
+            .map { FileUtil.safeGetCanonicalFile(it) }
+            .filter { root ->
+                root.exists() &&
+                    root.canRead() &&
+                    root.absolutePath !in setOf("/", "/storage", "/storage/emulated")
+            }
+            .distinctBy { it.absolutePath }
+    }
+
+    private suspend fun scanAudioPathsChunk(paths: List<String>): Int =
+        suspendCancellableCoroutine { continuation ->
+            if (paths.isEmpty()) {
+                continuation.resume(0)
+                return@suspendCancellableCoroutine
+            }
+            var scanned = 0
+            MediaScannerConnection.scanFile(
+                applicationContext,
+                paths.toTypedArray(),
+                null
+            ) { _, _ ->
+                scanned += 1
+                if (scanned >= paths.size && continuation.isActive) {
+                    continuation.resume(scanned)
+                }
+            }
+        }
 
     private fun maybeRunWebDavValidation() {
         val now = System.currentTimeMillis()

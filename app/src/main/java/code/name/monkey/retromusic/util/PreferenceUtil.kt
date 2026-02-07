@@ -61,6 +61,7 @@ import code.name.monkey.retromusic.LAST_DIRECTORY
 import code.name.monkey.retromusic.LAST_SLEEP_TIMER_VALUE
 import code.name.monkey.retromusic.LAST_USED_TAB
 import code.name.monkey.retromusic.LAST_WEBDAV_VALIDATION_AT
+import code.name.monkey.retromusic.LOCAL_SONGS_BOOTSTRAP_INSTALL_TIME
 import code.name.monkey.retromusic.LIBRARY_CATEGORIES
 import code.name.monkey.retromusic.LOCALE_AUTO_STORE_ENABLED
 import code.name.monkey.retromusic.LOCK_SCREEN
@@ -144,6 +145,8 @@ object PreferenceUtil {
     private const val WEBDAV_DIRECTORY_SUMMARIES_PREFIX = "webdav_directory_summaries_"
     private const val WEBDAV_SYNC_CHECKPOINT_FOLDERS_PREFIX = "webdav_sync_checkpoint_folders_"
     private const val WEBDAV_SYNC_CHECKPOINT_SCOPE_PREFIX = "webdav_sync_checkpoint_scope_"
+    @Volatile
+    private var localSongsBootstrapRunning = false
 
     val defaultCategories = listOf(
         CategoryInfo(CategoryInfo.Category.Home, true),
@@ -926,6 +929,16 @@ object PreferenceUtil {
     var lastWebDavValidationAt: Long
         get() = sharedPreferences.getLong(LAST_WEBDAV_VALIDATION_AT, 0L)
         set(value) = sharedPreferences.edit { putLong(LAST_WEBDAV_VALIDATION_AT, value) }
+
+    var localSongsBootstrapInstallTime: Long
+        get() = sharedPreferences.getLong(LOCAL_SONGS_BOOTSTRAP_INSTALL_TIME, 0L)
+        set(value) = sharedPreferences.edit { putLong(LOCAL_SONGS_BOOTSTRAP_INSTALL_TIME, value) }
+
+    var isLocalSongsBootstrapRunning: Boolean
+        get() = localSongsBootstrapRunning
+        set(value) {
+            localSongsBootstrapRunning = value
+        }
 
     fun getWebDavSyncedFolders(configId: Long): Set<String> {
         if (configId <= 0L) return emptySet()

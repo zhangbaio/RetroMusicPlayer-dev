@@ -24,6 +24,7 @@ import code.name.monkey.retromusic.activities.MainActivity
 import code.name.monkey.retromusic.appshortcuts.DynamicShortcutManager
 import code.name.monkey.retromusic.billing.BillingManager
 import code.name.monkey.retromusic.helper.WallpaperAccentManager
+import code.name.monkey.retromusic.util.PreferenceUtil
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -35,6 +36,14 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        val installTime = runCatching {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0).firstInstallTime
+        }.getOrDefault(0L)
+        if (installTime > 0L && PreferenceUtil.localSongsBootstrapInstallTime != installTime) {
+            PreferenceUtil.isLocalSongsBootstrapRunning = true
+        }
 
         startKoin {
             androidContext(this@App)
