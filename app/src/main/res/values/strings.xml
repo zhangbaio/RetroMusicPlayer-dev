@@ -610,6 +610,12 @@
     <string name="webdav_sync_paused_title">WebDAV sync paused</string>
     <string name="webdav_sync_paused_content">Tap resume to continue from the last checkpoint.</string>
     <string name="webdav_config_saved">Configuration saved</string>
+    <string name="action_download_to_device">Download to device</string>
+    <string name="webdav_download_started">Downloading…</string>
+    <string name="webdav_download_success">Downloaded to Music/RetroMusic/WebDAV</string>
+    <string name="webdav_download_failed">Download failed: %1$s</string>
+    <string name="webdav_download_failed_generic">Unknown error</string>
+    <string name="webdav_download_only_supported_for_webdav_song">This action only works for WebDAV songs</string>
     <string name="webdav_config_deleted">Configuration deleted</string>
     <string name="webdav_fill_all_fields">Please fill all fields</string>
 

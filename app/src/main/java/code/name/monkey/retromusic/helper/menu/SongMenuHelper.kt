@@ -29,15 +29,19 @@ import code.name.monkey.retromusic.activities.tageditor.SongTagEditorActivity
 import code.name.monkey.retromusic.dialogs.AddToPlaylistDialog
 import code.name.monkey.retromusic.dialogs.DeleteSongsDialog
 import code.name.monkey.retromusic.dialogs.SongDetailDialog
+import code.name.monkey.retromusic.extensions.showToast
 import code.name.monkey.retromusic.fragments.LibraryViewModel
 import code.name.monkey.retromusic.fragments.ReloadType
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.interfaces.IPaletteColorHolder
 import code.name.monkey.retromusic.model.Song
+import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.providers.BlacklistStore
 import code.name.monkey.retromusic.repository.RealRepository
+import code.name.monkey.retromusic.repository.WebDAVRepository
 import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.RingtoneManager
+import code.name.monkey.retromusic.webdav.WebDAVSongDownloadUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,6 +73,35 @@ object SongMenuHelper : KoinComponent {
                         null
                     )
                 )
+                return true
+            }
+            R.id.action_download_to_device -> {
+                if (!isWebDavSong(song)) {
+                    activity.showToast(R.string.webdav_download_only_supported_for_webdav_song)
+                    return true
+                }
+                activity.showToast(R.string.webdav_download_started)
+                CoroutineScope(Dispatchers.IO).launch {
+                    val result = WebDAVSongDownloadUtil.downloadSong(
+                        context = activity.applicationContext,
+                        song = song,
+                        repository = get<WebDAVRepository>()
+                    )
+                    withContext(Dispatchers.Main) {
+                        result.fold(
+                            onSuccess = {
+                                activity.showToast(R.string.webdav_download_success)
+                            },
+                            onFailure = { error ->
+                                val message = error.message?.takeIf { it.isNotBlank() }
+                                    ?: activity.getString(R.string.webdav_download_failed_generic)
+                                activity.showToast(
+                                    activity.getString(R.string.webdav_download_failed, message)
+                                )
+                            }
+                        )
+                    }
+                }
                 return true
             }
             R.id.action_delete_from_device -> {
@@ -142,6 +175,7 @@ object SongMenuHelper : KoinComponent {
         override fun onClick(v: View) {
             val popupMenu = PopupMenu(activity, v)
             popupMenu.inflate(menuRes)
+            popupMenu.menu.findItem(R.id.action_download_to_device)?.isVisible = isWebDavSong(song)
             popupMenu.setOnMenuItemClickListener(this)
             popupMenu.show()
         }
@@ -149,5 +183,14 @@ object SongMenuHelper : KoinComponent {
         override fun onMenuItemClick(item: MenuItem): Boolean {
             return handleMenuClick(activity, song, item.itemId)
         }
+    }
+
+    private fun isWebDavSong(song: Song): Boolean {
+        val remotePath = song.remotePath
+        return song.sourceType == SourceType.WEBDAV ||
+            song.data.startsWith("http://") ||
+            song.data.startsWith("https://") ||
+            (!remotePath.isNullOrBlank() &&
+                (remotePath.startsWith("http://") || remotePath.startsWith("https://")))
     }
 }

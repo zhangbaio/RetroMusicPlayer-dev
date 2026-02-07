@@ -380,6 +380,12 @@
     <string name="pref_title_audio_ducking">焦点丢失时降低音量</string>
     <string name="pref_title_audio_fade">音频淡入淡出</string>
     <string name="pref_title_auto_download_artist_images">自动下载艺术家图片</string>
+    <string name="action_download_to_device">下载到本地</string>
+    <string name="webdav_download_started">正在下载…</string>
+    <string name="webdav_download_success">已下载到 Music/RetroMusic/WebDAV</string>
+    <string name="webdav_download_failed">下载失败：%1$s</string>
+    <string name="webdav_download_failed_generic">未知错误</string>
+    <string name="webdav_download_only_supported_for_webdav_song">该操作仅支持 WebDAV 歌曲</string>
     <string name="pref_title_blacklist">黑名单</string>
     <string name="pref_title_bluetooth_playback">蓝牙播放</string>
     <string name="pref_title_blurred_album_art">模糊专辑封面</string>
