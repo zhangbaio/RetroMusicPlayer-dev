@@ -26,10 +26,17 @@ import androidx.appcompat.widget.Toolbar
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.isVisible
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.transition.ChangeBounds
+import androidx.transition.Fade
+import androidx.transition.Transition
+import androidx.transition.TransitionListenerAdapter
+import androidx.transition.TransitionManager
+import androidx.transition.TransitionSet
 import code.name.monkey.appthemehelper.util.ToolbarContentTintHelper
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.SNOWFALL
@@ -87,9 +94,12 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     private var recyclerViewDragDropManager: RecyclerViewDragDropManager? = null
     private var recyclerViewTouchActionGuardManager: RecyclerViewTouchActionGuardManager? = null
     private var queueLayoutManager: LinearLayoutManager? = null
+    private var isModeTransitionRunning = false
 
     companion object {
         private const val FULLSCREEN_DELAY = 3000L // 3 seconds
+        private const val MODE_SWITCH_OUT_DURATION = 140L
+        private const val MODE_SWITCH_IN_DURATION = 220L
 
         fun newInstance(): PlayerFragment {
             return PlayerFragment()
@@ -382,6 +392,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     }
 
     override fun onLyricsClicked(): Boolean {
+        if (isModeTransitionRunning) return true
         if (!isLyricsMode) return false
         if (isFullscreenLyrics) {
             // 全屏歌词模式 → 退出全屏，回到播放界面（保持歌词模式，3秒后再次进入全屏）
@@ -401,6 +412,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     override fun onDestroyView() {
         stopFullscreenTimer()
         fullscreenHandler = null
+        isModeTransitionRunning = false
         releaseQueueResources()
         super.onDestroyView()
         PreferenceManager.getDefaultSharedPreferences(requireContext())
@@ -429,12 +441,65 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
         // Setup bottom toolbar buttons
         binding.actionLyrics?.setOnClickListener {
+            if (isModeTransitionRunning) return@setOnClickListener
             toggleLyrics()
         }
         binding.actionCast?.setUpCastButton(requireContext())
         binding.actionQueue?.setOnClickListener {
+            if (isModeTransitionRunning) return@setOnClickListener
             toggleQueueMode()
         }
+    }
+
+    private fun buildModeSwitchTransition(): Transition {
+        return TransitionSet().apply {
+            ordering = TransitionSet.ORDERING_TOGETHER
+            addTransition(ChangeBounds().apply {
+                duration = MODE_SWITCH_IN_DURATION
+                interpolator = FastOutSlowInInterpolator()
+            })
+            addTransition(Fade(Fade.OUT).apply {
+                duration = MODE_SWITCH_OUT_DURATION
+                interpolator = FastOutSlowInInterpolator()
+            })
+            addTransition(Fade(Fade.IN).apply {
+                startDelay = MODE_SWITCH_OUT_DURATION / 2
+                duration = MODE_SWITCH_IN_DURATION
+                interpolator = FastOutSlowInInterpolator()
+            })
+        }
+    }
+
+    private fun runModeTransition(block: () -> Unit) {
+        if (_binding == null) return
+        if (isModeTransitionRunning) return
+        val sceneRoot = binding.playerContainer as? android.view.ViewGroup ?: run {
+            block()
+            return
+        }
+        isModeTransitionRunning = true
+        val transition = buildModeSwitchTransition()
+        transition.addListener(object : TransitionListenerAdapter() {
+            override fun onTransitionEnd(transition: Transition) {
+                isModeTransitionRunning = false
+                transition.removeListener(this)
+            }
+
+            override fun onTransitionCancel(transition: Transition) {
+                isModeTransitionRunning = false
+                transition.removeListener(this)
+            }
+        })
+        TransitionManager.beginDelayedTransition(sceneRoot, transition)
+        block()
+    }
+
+    private inline fun applyModeVisibilityChanges(animated: Boolean, crossinline block: () -> Unit) {
+        if (!animated) {
+            block()
+            return
+        }
+        runModeTransition { block() }
     }
 
     private fun toggleLyrics() {
@@ -453,18 +518,20 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         }
     }
 
-    private fun enterLyricsMode() {
+    private fun enterLyricsMode(animated: Boolean = true) {
         // 如果在队列模式下，先退出队列
         if (isQueueMode) {
-            exitQueueMode()
+            exitQueueMode(animated = false)
         }
         isLyricsMode = true
-        // 显示歌曲头部信息（小专辑图+歌名+歌手+收藏+更多）
-        binding.songHeaderContainer?.isVisible = true
+        applyModeVisibilityChanges(animated) {
+            // 显示歌曲头部信息（小专辑图+歌名+歌手+收藏+更多）
+            binding.songHeaderContainer?.isVisible = true
+            // 修改 playerAlbumCoverFragment 的顶部约束到 songHeaderContainer
+            updateAlbumCoverConstraints(lyricsMode = true)
+        }
         // 隐藏控制栏中的歌曲信息（标题、歌手、收藏、更多）
         controlsFragment.setSongInfoVisible(false)
-        // 修改 playerAlbumCoverFragment 的顶部约束到 songHeaderContainer
-        updateAlbumCoverConstraints(lyricsMode = true)
         // 通知 PlayerAlbumCoverFragment 显示歌词
         val playerAlbumCoverFragment: PlayerAlbumCoverFragment = whichFragment(R.id.playerAlbumCoverFragment)
         playerAlbumCoverFragment.setLyricsMode(true)
@@ -473,7 +540,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         startFullscreenTimer()
     }
 
-    private fun exitLyricsMode() {
+    private fun exitLyricsMode(animated: Boolean = true) {
         isLyricsMode = false
         stopFullscreenTimer()
         if (isFullscreenLyrics) {
@@ -486,12 +553,14 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
             binding.bottomToolbarContainer?.translationY = 0f
             binding.bottomToolbarContainer?.isVisible = true
         }
-        // 隐藏歌曲头部信息
-        binding.songHeaderContainer?.isVisible = false
+        applyModeVisibilityChanges(animated) {
+            // 隐藏歌曲头部信息
+            binding.songHeaderContainer?.isVisible = false
+            // 恢复 playerAlbumCoverFragment 的约束
+            updateAlbumCoverConstraints(lyricsMode = false)
+        }
         // 显示控制栏中的歌曲信息
         controlsFragment.setSongInfoVisible(true)
-        // 恢复 playerAlbumCoverFragment 的约束
-        updateAlbumCoverConstraints(lyricsMode = false)
         // 通知 PlayerAlbumCoverFragment 显示封面
         val playerAlbumCoverFragment: PlayerAlbumCoverFragment = whichFragment(R.id.playerAlbumCoverFragment)
         playerAlbumCoverFragment.setLyricsMode(false)
@@ -520,19 +589,21 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         }
     }
 
-    private fun enterQueueMode() {
+    private fun enterQueueMode(animated: Boolean = true) {
         // 如果在歌词模式下，先退出歌词
         if (isLyricsMode) {
-            exitLyricsMode()
+            exitLyricsMode(animated = false)
         }
         isQueueMode = true
 
-        // 队列模式下让歌曲列表占据更多空间，不显示顶部歌曲信息区
-        binding.songHeaderContainer?.isVisible = false
-        // 隐藏专辑封面
-        binding.playerAlbumCoverFragment.isVisible = false
-        // 显示队列容器
-        binding.queueContainer?.isVisible = true
+        applyModeVisibilityChanges(animated) {
+            // 队列模式下让歌曲列表占据更多空间，不显示顶部歌曲信息区
+            binding.songHeaderContainer?.isVisible = false
+            // 隐藏专辑封面
+            binding.playerAlbumCoverFragment.isVisible = false
+            // 显示队列容器
+            binding.queueContainer?.isVisible = true
+        }
         // 隐藏控制栏中的歌曲信息（标题、歌手、收藏、更多）
         controlsFragment.setSongInfoVisible(false)
 
@@ -551,15 +622,17 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         queueLayoutManager?.scrollToPositionWithOffset(MusicPlayerRemote.position + 1, 0)
     }
 
-    private fun exitQueueMode() {
+    private fun exitQueueMode(animated: Boolean = true) {
         isQueueMode = false
 
-        // 隐藏歌曲头部信息
-        binding.songHeaderContainer?.isVisible = false
-        // 显示专辑封面
-        binding.playerAlbumCoverFragment.isVisible = true
-        // 隐藏队列容器
-        binding.queueContainer?.isVisible = false
+        applyModeVisibilityChanges(animated) {
+            // 隐藏歌曲头部信息
+            binding.songHeaderContainer?.isVisible = false
+            // 显示专辑封面
+            binding.playerAlbumCoverFragment.isVisible = true
+            // 隐藏队列容器
+            binding.queueContainer?.isVisible = false
+        }
         // 显示控制栏中的歌曲信息
         controlsFragment.setSongInfoVisible(true)
         binding.queueRecyclerView?.let { recyclerView ->

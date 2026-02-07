@@ -22,6 +22,7 @@ import android.view.View
 import androidx.annotation.ColorInt
 import androidx.core.animation.doOnEnd
 import androidx.core.view.isVisible
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -81,6 +82,7 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
 
     // 是否处于歌词模式（由外部 PlayerFragment 控制）
     private var isInLyricsMode = false
+    private var isLyricsModeTransitionRunning = false
 
     /**
      * 设置是否显示歌词模式
@@ -91,19 +93,62 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
         val nps = PreferenceUtil.nowPlayingScreen
         if (nps == Normal) {
             if (showLyrics) {
-                // 歌词模式：隐藏 ViewPager，显示歌词
-                binding.viewPager.isVisible = false
-                binding.lyricsView.isVisible = true
-                binding.coverLyrics.isVisible = false
+                animateNormalLyricsMode(showLyrics = true)
                 progressViewUpdateHelper?.start()
             } else {
-                // 封面模式：显示 ViewPager，隐藏歌词
-                binding.viewPager.isVisible = true
-                binding.lyricsView.isVisible = false
-                binding.coverLyrics.isVisible = false
+                animateNormalLyricsMode(showLyrics = false)
                 progressViewUpdateHelper?.stop()
             }
         }
+    }
+
+    private fun animateNormalLyricsMode(showLyrics: Boolean) {
+        if (_binding == null) return
+        val showView = if (showLyrics) binding.lyricsView else binding.viewPager
+        val hideView = if (showLyrics) binding.viewPager else binding.lyricsView
+
+        if (showView.isVisible && !hideView.isVisible) {
+            return
+        }
+
+        val interpolator = FastOutSlowInInterpolator()
+        val offset = resources.displayMetrics.density * LYRICS_SWITCH_TRANSLATION_DP
+
+        if (isLyricsModeTransitionRunning) {
+            showView.animate().cancel()
+            hideView.animate().cancel()
+        }
+
+        showView.animate().cancel()
+        hideView.animate().cancel()
+
+        binding.coverLyrics.isVisible = false
+        showView.alpha = 0f
+        showView.translationY = offset
+        showView.isVisible = true
+        isLyricsModeTransitionRunning = true
+
+        hideView.animate()
+            .alpha(0f)
+            .translationY(-offset / 2f)
+            .setDuration(LYRICS_SWITCH_OUT_DURATION)
+            .setInterpolator(interpolator)
+            .withEndAction {
+                hideView.isVisible = false
+                hideView.alpha = 1f
+                hideView.translationY = 0f
+            }
+            .start()
+
+        showView.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(LYRICS_SWITCH_IN_DURATION)
+            .setInterpolator(interpolator)
+            .withEndAction {
+                isLyricsModeTransitionRunning = false
+            }
+            .start()
     }
 
     fun removeSlideEffect() {
@@ -212,6 +257,7 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
             .unregisterOnSharedPreferenceChangeListener(this)
         binding.viewPager.removeOnPageChangeListener(this)
         progressViewUpdateHelper?.stop()
+        isLyricsModeTransitionRunning = false
         _binding = null
     }
 
@@ -414,6 +460,9 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
 
     companion object {
         val TAG: String = PlayerAlbumCoverFragment::class.java.simpleName
+        private const val LYRICS_SWITCH_OUT_DURATION = 140L
+        private const val LYRICS_SWITCH_IN_DURATION = 220L
+        private const val LYRICS_SWITCH_TRANSLATION_DP = 8f
     }
 
     private val lyricViewNpsList =
