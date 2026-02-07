@@ -416,6 +416,7 @@ abstract class AbsPlayerFragment(@LayoutRes layout: Int) : AbsMusicServiceFragme
 fun goToArtist(activity: Activity) {
     if (activity !is MainActivity) return
     val song = MusicPlayerRemote.currentSong
+    if (song.displayArtistName.isBlank()) return
     activity.apply {
 
         // Remove exit transition of current fragment so

@@ -23,6 +23,7 @@ import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.databinding.FragmentHomePlayerBinding
 import code.name.monkey.retromusic.extensions.colorControlNormal
 import code.name.monkey.retromusic.fragments.base.AbsPlayerFragment
+import code.name.monkey.retromusic.fragments.base.goToArtist
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.helper.MusicProgressViewUpdateHelper
 import code.name.monkey.retromusic.model.Song
@@ -46,6 +47,9 @@ class HomePlayerFragment : AbsPlayerFragment(R.layout.fragment_home_player),
         super.onViewCreated(view, savedInstanceState)
         _binding = FragmentHomePlayerBinding.bind(view)
         setUpPlayerToolbar()
+        binding.text.setOnClickListener {
+            goToArtist(requireActivity())
+        }
     }
 
     override fun onResume() {

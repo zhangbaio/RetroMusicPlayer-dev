@@ -213,18 +213,10 @@ class PlaylistDetailsFragment : AbsMainActivityFragment(R.layout.fragment_playli
         super.onPause()
     }
 
-    private fun showEmptyView() {
-        binding.empty.isVisible = true
-        binding.emptyText.isVisible = true
-    }
-
     fun songs(songs: List<Song>) {
         binding.progressIndicator.hide()
-        if (songs.isNotEmpty()) {
-            playlistSongAdapter.swapDataSet(songs)
-        } else {
-            showEmptyView()
-        }
+        playlistSongAdapter.swapDataSet(songs)
+        checkIsEmpty()
     }
 
     override fun onDestroyView() {

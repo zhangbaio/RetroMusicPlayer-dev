@@ -27,6 +27,7 @@ import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.databinding.FragmentPlayerPlaybackControlsBinding
 import code.name.monkey.retromusic.extensions.*
 import code.name.monkey.retromusic.fragments.base.AbsPlayerControlsFragment
+import code.name.monkey.retromusic.fragments.base.goToArtist
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
@@ -72,6 +73,9 @@ class PlayerPlaybackControlsFragment :
     private fun setUpSongInfo() {
         binding.title.isSelected = true
         binding.text.isSelected = true
+        binding.text.setOnClickListener {
+            goToArtist(requireActivity())
+        }
 
         binding.songFavourite.setOnClickListener {
             // 调用父 Fragment 的 toggleFavorite 方法

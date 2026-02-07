@@ -527,8 +527,8 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         }
         isQueueMode = true
 
-        // 显示歌曲头部信息
-        binding.songHeaderContainer?.isVisible = true
+        // 队列模式下让歌曲列表占据更多空间，不显示顶部歌曲信息区
+        binding.songHeaderContainer?.isVisible = false
         // 隐藏专辑封面
         binding.playerAlbumCoverFragment.isVisible = false
         // 显示队列容器
@@ -542,6 +542,8 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         updateQueueModeButtons()
         // 更新区块副标题
         updateQueueSectionSubtitle()
+        // 让队列列表扩展到进度条上方，不改变进度条与播放控件位置
+        updateQueueRecyclerBottomPadding()
         // 更新队列图标
         updateQueueIcon()
 
@@ -560,6 +562,14 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         binding.queueContainer?.isVisible = false
         // 显示控制栏中的歌曲信息
         controlsFragment.setSongInfoVisible(true)
+        binding.queueRecyclerView?.let { recyclerView ->
+            recyclerView.setPadding(
+                recyclerView.paddingLeft,
+                recyclerView.paddingTop,
+                recyclerView.paddingRight,
+                0
+            )
+        }
 
         // 更新队列图标
         updateQueueIcon()
@@ -598,7 +608,8 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         val shuffleMode = MusicPlayerRemote.shuffleMode
         val isShuffleOn = shuffleMode == MusicService.SHUFFLE_MODE_SHUFFLE
         binding.queueShuffleButton?.let { btn ->
-            btn.text = getString(R.string.shuffle)
+            btn.text = ""
+            btn.contentDescription = getString(R.string.shuffle)
             btn.alpha = if (isShuffleOn) 1.0f else 0.5f
             btn.setOnClickListener {
                 MusicPlayerRemote.toggleShuffleMode()
@@ -608,20 +619,19 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         // Repeat 按钮
         val repeatMode = MusicPlayerRemote.repeatMode
         binding.queueRepeatButton?.let { btn ->
+            btn.text = ""
+            btn.contentDescription = getString(R.string.action_cycle_repeat)
             when (repeatMode) {
                 MusicService.REPEAT_MODE_NONE -> {
                     btn.setIconResource(R.drawable.ic_repeat)
-                    btn.text = getString(R.string.action_cycle_repeat)
                     btn.alpha = 0.5f
                 }
                 MusicService.REPEAT_MODE_ALL -> {
                     btn.setIconResource(R.drawable.ic_repeat)
-                    btn.text = getString(R.string.action_cycle_repeat)
                     btn.alpha = 1.0f
                 }
                 MusicService.REPEAT_MODE_THIS -> {
                     btn.setIconResource(R.drawable.ic_repeat_one)
-                    btn.text = getString(R.string.action_cycle_repeat)
                     btn.alpha = 1.0f
                 }
             }
@@ -632,7 +642,8 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
         // Autoplay 按钮
         binding.queueAutoplayButton?.let { btn ->
-            btn.text = getString(R.string.action_toggle_autoplay)
+            btn.text = ""
+            btn.contentDescription = getString(R.string.action_toggle_autoplay)
             btn.alpha = 0.5f
             btn.setOnClickListener {
                 // TODO: implement autoplay toggle
@@ -671,6 +682,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
             MusicPlayerRemote.position
         )
         updateQueueSectionSubtitle()
+        updateQueueRecyclerBottomPadding()
     }
 
     private fun updateInlineQueuePosition() {
@@ -679,6 +691,35 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         binding.queueRecyclerView?.stopScroll()
         queueLayoutManager?.scrollToPositionWithOffset(MusicPlayerRemote.position + 1, 0)
         updateQueueSectionSubtitle()
+        updateQueueRecyclerBottomPadding()
+    }
+
+    private fun updateQueueRecyclerBottomPadding() {
+        val recyclerView = binding.queueRecyclerView ?: return
+        recyclerView.post {
+            if (!isQueueMode || _binding == null) return@post
+            val progressSlider = binding.playbackControlsFragment.findViewById<View>(R.id.progressSlider)
+                ?: return@post
+
+            val recyclerLocation = IntArray(2)
+            val progressLocation = IntArray(2)
+            recyclerView.getLocationOnScreen(recyclerLocation)
+            progressSlider.getLocationOnScreen(progressLocation)
+
+            val recyclerBottom = recyclerLocation[1] + recyclerView.height
+            val progressTop = progressLocation[1]
+            val reservedBottom = (recyclerBottom - progressTop).coerceAtLeast(0)
+
+            if (recyclerView.paddingBottom != reservedBottom) {
+                recyclerView.setPadding(
+                    recyclerView.paddingLeft,
+                    recyclerView.paddingTop,
+                    recyclerView.paddingRight,
+                    reservedBottom
+                )
+            }
+            recyclerView.clipToPadding = false
+        }
     }
 
     private fun releaseQueueResources() {
