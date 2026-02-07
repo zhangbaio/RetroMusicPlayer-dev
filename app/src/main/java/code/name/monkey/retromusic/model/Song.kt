@@ -35,7 +35,8 @@ open class Song(
     // WebDAV support fields - defaults ensure backward compatibility
     open val sourceType: SourceType = SourceType.LOCAL,
     open val remotePath: String? = null,  // Full URL for WebDAV songs
-    open val webDavConfigId: Long? = null
+    open val webDavConfigId: Long? = null,
+    open val webDavAlbumArtPath: String? = null
 ) : Parcelable {
 
 
@@ -62,6 +63,7 @@ open class Song(
         if (sourceType != other.sourceType) return false
         if (remotePath != other.remotePath) return false
         if (webDavConfigId != other.webDavConfigId) return false
+        if (webDavAlbumArtPath != other.webDavAlbumArtPath) return false
 
         return true
     }
@@ -83,6 +85,7 @@ open class Song(
         result = 31 * result + sourceType.hashCode()
         result = 31 * result + (remotePath?.hashCode() ?: 0)
         result = 31 * result + (webDavConfigId?.hashCode() ?: 0)
+        result = 31 * result + (webDavAlbumArtPath?.hashCode() ?: 0)
         return result
     }
 

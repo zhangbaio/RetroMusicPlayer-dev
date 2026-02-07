@@ -78,8 +78,14 @@ interface WebDAVDao {
     @Query("DELETE FROM webdav_songs WHERE config_id = :configId")
     suspend fun deleteSongsByConfig(configId: Long)
 
+    @Query("DELETE FROM webdav_songs WHERE config_id = :configId AND remote_path IN (:paths)")
+    suspend fun deleteSongsByPaths(configId: Long, paths: List<String>)
+
     @Query("DELETE FROM webdav_songs WHERE id = :songId")
     suspend fun deleteSongById(songId: Long)
+
+    @Query("DELETE FROM webdav_songs WHERE id IN (:songIds)")
+    suspend fun deleteSongsByIds(songIds: List<Long>)
 
     @Query("DELETE FROM webdav_songs WHERE config_id = :configId AND remote_path LIKE :folderPath || '/%'")
     suspend fun deleteSongsByFolder(configId: Long, folderPath: String)

@@ -170,7 +170,7 @@ class WebDAVSettingsFragment : Fragment(),
             }
             android.util.Log.d("WebDAVSettings", "Setting password to EditText, length=${decryptedPassword.length}, isEmpty=${decryptedPassword.isEmpty()}")
             // If decryption returns empty, show a placeholder or the encrypted marker
-            if (decryptedPassword.isNotEmpty()) {
+            if (decryptedPassword.isNotEmpty() && !decryptedPassword.startsWith("encrypted://")) {
                 dialogBinding.passwordEditText.setText(decryptedPassword)
             } else {
                 // Password not found in encrypted storage - user needs to re-enter
@@ -369,7 +369,7 @@ class WebDAVSettingsFragment : Fragment(),
     private fun testConnectionInDialog(dialogBinding: DialogWebdavConfigBinding) {
         val url = dialogBinding.urlEditText.text.toString().trim()
         val username = dialogBinding.usernameEditText.text.toString().trim()
-        val password = dialogBinding.passwordEditText.text.toString()
+        val password = resolvePasswordInput(dialogBinding.passwordEditText.text.toString())
 
         if (url.isEmpty() || username.isEmpty() || password.isEmpty()) {
             requireContext().showToast("Please enter server URL, username and password first")
@@ -404,7 +404,7 @@ class WebDAVSettingsFragment : Fragment(),
         val name = dialogBinding.nameEditText.text.toString().trim()
         val url = dialogBinding.urlEditText.text.toString().trim()
         val username = dialogBinding.usernameEditText.text.toString().trim()
-        val password = dialogBinding.passwordEditText.text.toString()
+        val password = resolvePasswordInput(dialogBinding.passwordEditText.text.toString())
 
         if (name.isEmpty() || url.isEmpty() || username.isEmpty() || password.isEmpty()) {
             requireContext().showToast("Please fill all required fields", Toast.LENGTH_SHORT)
@@ -431,6 +431,15 @@ class WebDAVSettingsFragment : Fragment(),
         editingConfig = null
         selectedFoldersInDialog.clear()
         currentDialogBinding = null
+    }
+
+    private fun resolvePasswordInput(rawPassword: String): String {
+        if (!rawPassword.startsWith("encrypted://")) {
+            return rawPassword
+        }
+        val configId = editingConfig?.id ?: return ""
+        val decrypted = WebDAVCryptoUtil.decryptPassword(rawPassword, configId)
+        return if (decrypted.startsWith("encrypted://")) "" else decrypted
     }
 
     // WebDAVConfigAdapter.Callback implementation

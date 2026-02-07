@@ -38,10 +38,12 @@ class RealWebDAVRepository(
 
     companion object {
         private const val TAG = "RealWebDAVRepository"
+        private const val DELETE_PATH_BATCH_SIZE = 300
 
-        // Audio file extensions to scan for
-        private val AUDIO_EXTENSIONS = setOf(
-            "mp3", "flac", "m4a", "ogg", "wav", "aac", "opus", "wma", "m4b", "mp4a"
+        private val COVER_FILE_NAMES = setOf(
+            "cover.jpg", "album.jpg", "folder.jpg",
+            "cover.png", "album.png", "folder.png",
+            "cover.webp", "album.webp", "folder.webp"
         )
     }
 
@@ -58,31 +60,17 @@ class RealWebDAVRepository(
     }
 
     override suspend fun saveConfig(config: WebDAVConfig): Long = withContext(Dispatchers.IO) {
-        // If updating an existing config, check for removed folders and delete their songs
-        if (config.id > 0) {
-            val oldConfig = webDAVDao.getConfigById(config.id)
-            if (oldConfig != null) {
-                val oldFolders = oldConfig.getMusicFoldersList().toSet()
-                val newFolders = config.musicFolders.toSet()
-                val removedFolders = oldFolders - newFolders
-                for (folder in removedFolders) {
-                    Log.d(TAG, "Folder removed: $folder, deleting songs")
-                    webDAVDao.deleteSongsByFolder(config.id, folder)
-                }
-                // If all folders are removed, delete all songs for this config
-                if (newFolders.isEmpty() && oldFolders.isNotEmpty()) {
-                    Log.d(TAG, "All folders removed, deleting all songs for config ${config.id}")
-                    webDAVDao.deleteSongsByConfig(config.id)
-                }
-            }
+        val plainPassword = resolvePlainPassword(config)
+        if (plainPassword.isBlank()) {
+            throw IllegalArgumentException("Password is missing, please re-enter password")
         }
 
         // Encrypt password before saving
         val encryptedPassword = if (config.id > 0) {
-            WebDAVCryptoUtil.encryptPassword(config.password, config.id)
+            WebDAVCryptoUtil.encryptPassword(plainPassword, config.id)
         } else {
             // For new configs, we'll use a temporary ID and re-encrypt after insert
-            config.password
+            plainPassword
         }
 
         val entity = WebDAVConfigEntity(
@@ -100,13 +88,14 @@ class RealWebDAVRepository(
 
         // Re-encrypt with the actual ID if this was a new config
         if (config.id == 0L) {
-            WebDAVCryptoUtil.encryptPassword(config.password, id)
+            WebDAVCryptoUtil.encryptPassword(plainPassword, id)
         }
 
         id
     }
 
     override suspend fun deleteConfig(config: WebDAVConfig) = withContext(Dispatchers.IO) {
+        webDAVDao.deleteSongsByConfig(config.id)
         webDAVDao.deleteConfigById(config.id)
         WebDAVCryptoUtil.removePassword(config.id)
     }
@@ -114,7 +103,12 @@ class RealWebDAVRepository(
     override suspend fun testConnection(config: WebDAVConfig): Result<Boolean> =
         withContext(Dispatchers.IO) {
             try {
-                val success = webDAVClient.testConnection(config)
+                val plainPassword = resolvePlainPassword(config)
+                if (plainPassword.isBlank()) {
+                    return@withContext Result.failure(Exception("Password is missing, please re-enter password"))
+                }
+                val resolvedConfig = config.copy(password = plainPassword)
+                val success = webDAVClient.testConnection(resolvedConfig)
                 if (success) {
                     Result.success(true)
                 } else {
@@ -135,64 +129,118 @@ class RealWebDAVRepository(
             Log.d(TAG, "Config musicFolders: ${config.musicFolders}")
             Log.d(TAG, "Config serverUrl: ${config.serverUrl}")
 
-            // Decrypt password for the sync operation
-            val decryptedPassword = WebDAVCryptoUtil.decryptPassword(config.password, config.id)
-            Log.d(TAG, "Password decrypted, length: ${decryptedPassword.length}")
+            val plainPassword = resolvePlainPassword(config)
+            if (plainPassword.isBlank()) {
+                return@withContext Result.failure(Exception("Password is missing, please re-enter password"))
+            }
+            val decryptedConfig = config.copy(password = plainPassword)
 
-            val decryptedConfig = config.copy(password = decryptedPassword)
+            val existingSongs = webDAVDao.getSongsByConfig(configId)
+            val selectedFolders = config.musicFolders
+                .map(::normalizeFolderPath)
+                .distinct()
 
-            // If no folders configured, skip sync
-            if (config.musicFolders.isEmpty()) {
-                Log.d(TAG, "No music folders configured, skipping sync")
+            if (selectedFolders.isEmpty()) {
+                if (existingSongs.isNotEmpty()) {
+                    Log.d(TAG, "No folders selected, clearing ${existingSongs.size} local songs for config $configId")
+                    webDAVDao.deleteSongsByConfig(configId)
+                }
+                val updatedConfig = config.copy(lastSynced = System.currentTimeMillis())
+                saveConfig(updatedConfig)
                 return@withContext Result.success(0)
             }
 
-            // Scan for audio files
-            val webDAVClient = webDAVClient as? SardineWebDAVClient
+            // Remove songs that are no longer under the selected folders.
+            val staleByFolderSelection = existingSongs
+                .asSequence()
+                .filterNot { song ->
+                    selectedFolders.any { folder -> isPathUnderFolder(song.remotePath, folder) }
+                }
+                .map { it.remotePath }
+                .toSet()
+            deleteSongsByPathsInBatches(configId, staleByFolderSelection)
+
+            val sardineClient = webDAVClient as? SardineWebDAVClient
                 ?: return@withContext Result.failure(Exception("Invalid WebDAV client type"))
 
-            val foldersToScan = config.musicFolders
-            Log.d(TAG, "Folders to scan: $foldersToScan")
+            val scannedFilesByPath = linkedMapOf<String, WebDAVFile>()
+            val successfulFolders = mutableListOf<String>()
+            val failedFolders = mutableListOf<String>()
 
-            val audioFiles = mutableListOf<WebDAVFile>()
-            for (folder in foldersToScan) {
+            selectedFolders.forEach { folder ->
                 Log.d(TAG, "Scanning folder: '$folder'")
-                val files = webDAVClient.scanAudioFiles(decryptedConfig, folder)
-                Log.d(TAG, "Found ${files.size} files in folder: '$folder'")
-                audioFiles.addAll(files)
+                runCatching { sardineClient.scanAudioFiles(decryptedConfig, folder) }
+                    .onSuccess { files ->
+                        successfulFolders += folder
+                        files.forEach { file ->
+                            if (!scannedFilesByPath.containsKey(file.path)) {
+                                scannedFilesByPath[file.path] = file
+                            }
+                        }
+                        Log.d(TAG, "Found ${files.size} files in folder: '$folder'")
+                    }
+                    .onFailure { error ->
+                        failedFolders += folder
+                        Log.e(TAG, "Failed to scan folder '$folder'", error)
+                    }
             }
-            Log.d(TAG, "Total found ${audioFiles.size} audio files")
 
-            // Convert to Song entities
-            val songEntities = audioFiles.mapIndexed { index, file ->
+            if (successfulFolders.isEmpty()) {
+                return@withContext Result.failure(Exception("Sync failed, unable to scan selected folders"))
+            }
+
+            val scannedFiles = scannedFilesByPath.values.toList()
+            Log.d(TAG, "Total found ${scannedFiles.size} audio files")
+            val folderCoverMap = findFolderCoverMap(sardineClient, decryptedConfig, scannedFiles)
+            val existingByPath = existingSongs.associateBy { it.remotePath }
+            val remotePaths = scannedFilesByPath.keys.toSet()
+
+            // Only delete missing songs in folders that scanned successfully.
+            val staleByRemoteDeletion = existingSongs
+                .asSequence()
+                .map { it.remotePath }
+                .filter { path ->
+                    successfulFolders.any { folder -> isPathUnderFolder(path, folder) }
+                }
+                .filterNot { path -> path in remotePaths }
+                .toSet()
+            deleteSongsByPathsInBatches(configId, staleByRemoteDeletion)
+
+            val songEntities = scannedFiles.mapIndexed { index, file ->
+                val existingSong = existingByPath[file.path]
+                val parentPath = parentFolderPath(file.path)
                 WebDAVSongEntity(
+                    id = existingSong?.id ?: 0L,
                     configId = configId,
                     remotePath = file.path,
                     title = extractTitle(file.name),
-                    artistName = "Unknown Artist",
-                    albumName = "Unknown Album",
-                    duration = 0, // Will be updated when played
-                    albumArtPath = null,
+                    artistName = existingSong?.artistName ?: "Unknown Artist",
+                    albumName = existingSong?.albumName ?: "Unknown Album",
+                    duration = existingSong?.duration ?: 0,
+                    albumArtPath = folderCoverMap[parentPath] ?: existingSong?.albumArtPath,
                     trackNumber = index + 1,
-                    year = 0,
+                    year = existingSong?.year ?: 0,
                     fileSize = file.size,
-                    contentType = file.contentType ?: "audio/mpeg"
+                    contentType = file.contentType ?: existingSong?.contentType ?: "audio/mpeg"
                 )
             }
 
-            // Clear existing songs for this config and insert new ones
-            webDAVDao.deleteSongsByConfig(configId)
-            webDAVDao.insertSongs(songEntities)
-
-            // Verify insertion
-            val insertedCount = webDAVDao.getSongCount(configId)
-            Log.d(TAG, "Verified: $insertedCount songs in database for config $configId")
+            if (songEntities.isNotEmpty()) {
+                webDAVDao.insertSongs(songEntities)
+            }
 
             // Update last sync time
             val updatedConfig = config.copy(lastSynced = System.currentTimeMillis())
             saveConfig(updatedConfig)
 
-            Log.d(TAG, "Sync completed: ${songEntities.size} songs inserted")
+            val totalCount = webDAVDao.getSongCount(configId)
+            if (failedFolders.isNotEmpty()) {
+                Log.w(TAG, "Sync partially completed. Failed folders: $failedFolders")
+            }
+            Log.d(
+                TAG,
+                "Sync completed: upserted=${songEntities.size}, deletedBySelection=${staleByFolderSelection.size}, deletedByRemote=${staleByRemoteDeletion.size}, total=$totalCount"
+            )
             Result.success(songEntities.size)
         } catch (e: Exception) {
             Log.e(TAG, "Sync failed", e)
@@ -225,6 +273,11 @@ class RealWebDAVRepository(
         webDAVDao.deleteSongsByConfig(configId)
     }
 
+    override suspend fun deleteSongsByIds(songIds: List<Long>) = withContext(Dispatchers.IO) {
+        if (songIds.isEmpty()) return@withContext
+        webDAVDao.deleteSongsByIds(songIds)
+    }
+
     // Extension functions for mapping
 
     private fun WebDAVConfigEntity.toModel(): WebDAVConfig {
@@ -249,6 +302,11 @@ class RealWebDAVRepository(
         } else {
             remotePath
         }
+        val fullAlbumArtUrl = if (config != null && !albumArtPath.isNullOrBlank()) {
+            buildFullUrl(config.serverUrl, albumArtPath)
+        } else {
+            null
+        }
 
         return Song(
             id = id,
@@ -266,7 +324,8 @@ class RealWebDAVRepository(
             albumArtist = null,
             sourceType = SourceType.WEBDAV,
             remotePath = fullUrl,
-            webDavConfigId = configId
+            webDavConfigId = configId,
+            webDavAlbumArtPath = fullAlbumArtUrl
         )
     }
 
@@ -289,8 +348,66 @@ class RealWebDAVRepository(
             .trim()
     }
 
-    private fun isAudioFile(filename: String): Boolean {
-        val extension = filename.substringAfterLast('.', "").lowercase()
-        return extension in AUDIO_EXTENSIONS
+    private suspend fun findFolderCoverMap(
+        client: SardineWebDAVClient,
+        config: WebDAVConfig,
+        audioFiles: List<WebDAVFile>
+    ): Map<String, String> {
+        val folders = audioFiles
+            .map { parentFolderPath(it.path) }
+            .toSet()
+        val result = mutableMapOf<String, String>()
+        folders.forEach { folderPath ->
+            runCatching {
+                val files = client.listFiles(config, folderPath)
+                files.firstOrNull { file ->
+                    !file.isDirectory && file.name.lowercase() in COVER_FILE_NAMES
+                }?.path
+            }.onSuccess { coverPath ->
+                if (!coverPath.isNullOrBlank()) {
+                    result[folderPath] = coverPath
+                }
+            }.onFailure { error ->
+                Log.d(TAG, "Failed to resolve cover for folder '$folderPath': ${error.message}")
+            }
+        }
+        return result
+    }
+
+    private fun parentFolderPath(path: String): String {
+        val trimmed = path.trim().trimEnd('/')
+        val parent = trimmed.substringBeforeLast('/', "")
+        return if (parent.isBlank()) "/" else parent
+    }
+
+    private fun normalizeFolderPath(path: String): String {
+        val withLeadingSlash = if (path.startsWith("/")) path else "/$path"
+        val normalized = withLeadingSlash.trim().trimEnd('/')
+        return if (normalized.isBlank()) "/" else normalized
+    }
+
+    private fun isPathUnderFolder(path: String, folderPath: String): Boolean {
+        val normalizedFolder = normalizeFolderPath(folderPath)
+        val normalizedPath = normalizeFolderPath(path)
+        return if (normalizedFolder == "/") {
+            true
+        } else {
+            normalizedPath == normalizedFolder || normalizedPath.startsWith("$normalizedFolder/")
+        }
+    }
+
+    private suspend fun deleteSongsByPathsInBatches(configId: Long, paths: Set<String>) {
+        if (paths.isEmpty()) return
+        paths.chunked(DELETE_PATH_BATCH_SIZE).forEach { batch ->
+            webDAVDao.deleteSongsByPaths(configId, batch)
+        }
+    }
+
+    private fun resolvePlainPassword(config: WebDAVConfig): String {
+        if (!config.password.startsWith("encrypted://")) {
+            return config.password
+        }
+        val decrypted = WebDAVCryptoUtil.decryptPassword(config.password, config.id)
+        return if (decrypted.startsWith("encrypted://")) "" else decrypted
     }
 }

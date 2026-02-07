@@ -60,6 +60,7 @@ import code.name.monkey.retromusic.LAST_CHANGELOG_VERSION
 import code.name.monkey.retromusic.LAST_DIRECTORY
 import code.name.monkey.retromusic.LAST_SLEEP_TIMER_VALUE
 import code.name.monkey.retromusic.LAST_USED_TAB
+import code.name.monkey.retromusic.LAST_WEBDAV_VALIDATION_AT
 import code.name.monkey.retromusic.LIBRARY_CATEGORIES
 import code.name.monkey.retromusic.LOCALE_AUTO_STORE_ENABLED
 import code.name.monkey.retromusic.LOCK_SCREEN
@@ -907,6 +908,10 @@ object PreferenceUtil {
         get() = sharedPreferences
             .getInt(LAST_USED_TAB, 0)
         set(value) = sharedPreferences.edit { putInt(LAST_USED_TAB, value) }
+
+    var lastWebDavValidationAt: Long
+        get() = sharedPreferences.getLong(LAST_WEBDAV_VALIDATION_AT, 0L)
+        set(value) = sharedPreferences.edit { putLong(LAST_WEBDAV_VALIDATION_AT, value) }
 
     val isWhiteList: Boolean
         get() = sharedPreferences.getBoolean(WHITELIST_MUSIC, false)

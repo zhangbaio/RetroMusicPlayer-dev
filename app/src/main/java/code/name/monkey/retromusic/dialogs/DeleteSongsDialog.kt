@@ -16,13 +16,16 @@ package code.name.monkey.retromusic.dialogs
 
 import android.app.Activity
 import android.app.Dialog
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.MediaStore
+import android.text.TextUtils
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.os.bundleOf
 import androidx.core.text.parseAsHtml
+import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.DialogFragment
 import code.name.monkey.appthemehelper.util.VersionUtils
 import code.name.monkey.retromusic.EXTRA_SONG
@@ -34,12 +37,17 @@ import code.name.monkey.retromusic.fragments.LibraryViewModel
 import code.name.monkey.retromusic.fragments.ReloadType
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.model.Song
+import code.name.monkey.retromusic.model.SourceType
+import code.name.monkey.retromusic.repository.WebDAVRepository
+import code.name.monkey.retromusic.extensions.showToast
 import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.SAFUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.getViewModel
+import org.koin.core.context.GlobalContext
 
 class DeleteSongsDialog : DialogFragment() {
     lateinit var libraryViewModel: LibraryViewModel
@@ -62,9 +70,10 @@ class DeleteSongsDialog : DialogFragment() {
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.let { data ->
-                SAFUtil.saveTreeUri(requireActivity(), data)
+                val hostActivity = activity ?: return@let
+                SAFUtil.saveTreeUri(hostActivity, data)
                 val songs = extraNotNull<List<Song>>(EXTRA_SONG).value
-                deleteSongs(songs)
+                deleteSongsWithSaf(songs)
             }
         }
     }
@@ -88,7 +97,8 @@ class DeleteSongsDialog : DialogFragment() {
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         libraryViewModel = activity?.getViewModel() as LibraryViewModel
         val songs = extraNotNull<List<Song>>(EXTRA_SONG).value
-        if (VersionUtils.hasR()) {
+        val hasWebDavSongs = songs.any(::isWebDavSong)
+        if (VersionUtils.hasR() && !hasWebDavSongs) {
             val deleteResultLauncher =
                 registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
                     if (result.resultCode == Activity.RESULT_OK) {
@@ -115,9 +125,10 @@ class DeleteSongsDialog : DialogFragment() {
                     String.format(getString(R.string.delete_x_songs), songs.size).parseAsHtml()
                 )
             } else {
+                val safeSongTitle = TextUtils.htmlEncode(songs[0].title)
                 Pair(
                     R.string.delete_song_title,
-                    String.format(getString(R.string.delete_song_x), songs[0].title).parseAsHtml()
+                    String.format(getString(R.string.delete_song_x), safeSongTitle).parseAsHtml()
                 )
             }
 
@@ -134,15 +145,12 @@ class DeleteSongsDialog : DialogFragment() {
                     if ((songs.size == 1) && MusicPlayerRemote.isPlaying(songs[0])) {
                         MusicPlayerRemote.playNextSong()
                     }
-                    if (!SAFUtil.isSAFRequiredForSongs(songs)) {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            dismiss()
-                            MusicUtil.deleteTracks(requireContext(), songs)
-                            reloadTabs()
-                        }
+                    val localSongs = songs.filterNot(::isWebDavSong)
+                    if (!SAFUtil.isSAFRequiredForSongs(localSongs)) {
+                        deleteSongs(songs)
                     } else {
                         if (SAFUtil.isSDCardAccessGranted(requireActivity())) {
-                            deleteSongs(songs)
+                            deleteSongsWithSaf(songs)
                         } else {
                             safGuideResultLauncher.launch(
                                 Intent(requireActivity(), SAFGuideActivity::class.java)
@@ -153,13 +161,62 @@ class DeleteSongsDialog : DialogFragment() {
         }
     }
 
-    fun deleteSongs(songs: List<Song>) {
+    private fun deleteSongsWithSaf(songs: List<Song>) {
+        deleteSongs(songs, useSafDelete = true)
+    }
+
+    private fun deleteSongs(
+        songs: List<Song>,
+        useSafDelete: Boolean = false
+    ) {
+        val hostActivity = activity as? FragmentActivity
+        val appContext = context?.applicationContext ?: return
         CoroutineScope(Dispatchers.IO).launch {
-            dismiss()
-            MusicUtil.deleteTracks(requireActivity(), songs, null, null)
-            reloadTabs()
+            deleteSongsInternal(
+                songs = songs,
+                hostActivity = hostActivity,
+                appContext = appContext,
+                useSafDelete = useSafDelete
+            )
+            withContext(Dispatchers.Main) {
+                dismissAllowingStateLoss()
+                reloadTabs()
+            }
         }
     }
+
+    private suspend fun deleteSongsInternal(
+        songs: List<Song>,
+        hostActivity: FragmentActivity?,
+        appContext: Context,
+        useSafDelete: Boolean = false
+    ) {
+        val localSongs = songs.filterNot(::isWebDavSong)
+        val webDavSongs = songs.filter(::isWebDavSong)
+
+        if (localSongs.isNotEmpty()) {
+            if (useSafDelete && hostActivity != null) {
+                MusicUtil.deleteTracks(hostActivity, localSongs, null, null)
+            } else {
+                MusicUtil.deleteTracks(appContext, localSongs)
+            }
+        }
+
+        if (webDavSongs.isNotEmpty()) {
+            val webDavRepository = GlobalContext.get().get<WebDAVRepository>()
+            webDavRepository.deleteSongsByIds(webDavSongs.map { it.id })
+            MusicPlayerRemote.removeFromQueue(webDavSongs)
+            if (localSongs.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    appContext.showToast(
+                        appContext.getString(R.string.deleted_x_songs, webDavSongs.size)
+                    )
+                }
+            }
+        }
+    }
+
+    private fun isWebDavSong(song: Song): Boolean = song.sourceType == SourceType.WEBDAV
 
     private fun reloadTabs() {
         libraryViewModel.forceReload(ReloadType.Songs)

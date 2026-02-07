@@ -1,9 +1,11 @@
 package code.name.monkey.retromusic.webdav
 
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.model.SourceType
+import code.name.monkey.retromusic.model.lyrics.AbsSynchronizedLyrics
 import code.name.monkey.retromusic.repository.WebDAVRepository
 import code.name.monkey.retromusic.util.LyricUtil
 import okhttp3.OkHttpClient
@@ -30,6 +32,8 @@ object WebDAVLyricUtil : KoinComponent {
 
     private const val TAG = "WebDAVLyricUtil"
     private const val MAX_AUDIO_DOWNLOAD_SIZE = 100L * 1024 * 1024 // 100MB limit
+    private val SIDECAR_EXTENSIONS = listOf("lrc", "LRC", "txt", "TXT")
+    private val COMMON_LYRIC_FILE_NAMES = listOf("lyrics.lrc", "lyrics.LRC", "lyrics.txt", "lyrics.TXT")
 
     private val webDAVRepository: WebDAVRepository by inject()
 
@@ -66,10 +70,9 @@ object WebDAVLyricUtil : KoinComponent {
             "${config.username}:$password".toByteArray(), Base64.NO_WRAP
         )
 
-        // 2. Try downloading .lrc sidecar from WebDAV
-        val lrcUrl = song.data.replaceAfterLast(".", "lrc")
-        val remoteLrc = downloadText(lrcUrl, credentials)
-        if (!remoteLrc.isNullOrBlank()) {
+        // 2. Try downloading sidecar lyrics from WebDAV
+        val remoteLrc = downloadSidecarLyrics(song.data, credentials)
+        if (!remoteLrc.isNullOrBlank() && AbsSynchronizedLyrics.isSynchronized(remoteLrc)) {
             // Cache locally for future use
             LyricUtil.writeLrcToLoc(song.title, song.artistName, remoteLrc)
             return remoteLrc
@@ -99,7 +102,47 @@ object WebDAVLyricUtil : KoinComponent {
             "${config.username}:$password".toByteArray(), Base64.NO_WRAP
         )
 
+        val sidecarLyrics = downloadSidecarLyrics(song.data, credentials)
+        if (!sidecarLyrics.isNullOrBlank()) {
+            return sidecarLyrics
+        }
+
         return downloadAndExtractAllLyrics(song.data, credentials)
+    }
+
+    private fun downloadSidecarLyrics(audioUrl: String, credentials: String): String? {
+        val sidecarUrls = buildSidecarLyricUrls(audioUrl)
+        for (sidecarUrl in sidecarUrls) {
+            val sidecarLyrics = downloadText(sidecarUrl, credentials)
+            if (!sidecarLyrics.isNullOrBlank()) {
+                return sidecarLyrics
+            }
+        }
+        return null
+    }
+
+    private fun buildSidecarLyricUrls(audioUrl: String): List<String> {
+        val uri = Uri.parse(audioUrl)
+        val audioPath = uri.path ?: return emptyList()
+        val parentPath = audioPath.substringBeforeLast('/', "")
+        val audioFileName = audioPath.substringAfterLast('/')
+        val baseName = audioFileName.substringBeforeLast('.', audioFileName)
+        val lyricNames = SIDECAR_EXTENSIONS.map { "$baseName.$it" } + COMMON_LYRIC_FILE_NAMES
+
+        return lyricNames.distinct().mapNotNull { lyricFileName ->
+            siblingUrl(uri, parentPath, lyricFileName)
+        }
+    }
+
+    private fun siblingUrl(uri: Uri, parentPath: String, fileName: String): String? {
+        return runCatching {
+            val targetPath = if (parentPath.isBlank()) {
+                "/$fileName"
+            } else {
+                "${parentPath.trimEnd('/')}/$fileName"
+            }
+            uri.buildUpon().path(targetPath).build().toString()
+        }.getOrNull()
     }
 
     private fun downloadText(url: String, credentials: String): String? {

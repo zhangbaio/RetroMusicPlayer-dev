@@ -18,6 +18,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.contains
 import androidx.navigation.ui.setupWithNavController
@@ -30,6 +31,7 @@ import code.name.monkey.retromusic.interfaces.IScrollHelper
 import code.name.monkey.retromusic.model.CategoryInfo
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.repository.PlaylistSongsLoader
+import code.name.monkey.retromusic.repository.WebDAVRepository
 import code.name.monkey.retromusic.service.MusicService
 import code.name.monkey.retromusic.util.AppRater
 import code.name.monkey.retromusic.util.PreferenceUtil
@@ -42,6 +44,7 @@ class MainActivity : AbsCastActivity() {
     companion object {
         const val TAG = "MainActivity"
         const val EXPAND_PANEL = "expand_panel"
+        private const val WEBDAV_VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,8 +55,39 @@ class MainActivity : AbsCastActivity() {
         AppRater.appLaunched(this)
 
         setupNavigationController()
+        maybeRunWebDavValidation()
 
         WhatsNewFragment.showChangeLog(this)
+    }
+
+    private fun maybeRunWebDavValidation() {
+        val now = System.currentTimeMillis()
+        val lastRunAt = PreferenceUtil.lastWebDavValidationAt
+        if (now - lastRunAt < WEBDAV_VALIDATION_INTERVAL_MS) {
+            return
+        }
+
+        PreferenceUtil.lastWebDavValidationAt = now
+        lifecycleScope.launch(IO) {
+            runCatching {
+                val webDavRepository: WebDAVRepository = get()
+                val enabledConfigs = webDavRepository.getEnabledConfigs()
+                if (enabledConfigs.isEmpty()) {
+                    return@runCatching
+                }
+                enabledConfigs.forEach { config ->
+                    val result = webDavRepository.syncSongs(config.id)
+                    if (result.isFailure) {
+                        Log.w(
+                            TAG,
+                            "WebDAV periodic validation failed for configId=${config.id}: ${result.exceptionOrNull()?.message}"
+                        )
+                    }
+                }
+            }.onFailure { error ->
+                Log.e(TAG, "WebDAV periodic validation crashed", error)
+            }
+        }
     }
 
     private fun setupNavigationController() {

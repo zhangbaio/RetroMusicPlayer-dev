@@ -80,4 +80,9 @@ interface WebDAVRepository {
      * Delete all songs for a specific configuration
      */
     suspend fun deleteSongsByConfig(configId: Long)
+
+    /**
+     * Delete cached WebDAV songs by local database IDs
+     */
+    suspend fun deleteSongsByIds(songIds: List<Long>)
 }
