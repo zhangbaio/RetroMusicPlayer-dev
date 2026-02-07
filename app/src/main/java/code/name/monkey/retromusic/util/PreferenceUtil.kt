@@ -83,6 +83,7 @@ import code.name.monkey.retromusic.REMEMBER_LAST_TAB
 import code.name.monkey.retromusic.SAF_SDCARD_URI
 import code.name.monkey.retromusic.SAVE_LAST_DIRECTORY
 import code.name.monkey.retromusic.SCREEN_ON_LYRICS
+import code.name.monkey.retromusic.SEARCH_TAB_VISIBILITY_MIGRATED
 import code.name.monkey.retromusic.SHOW_LYRICS
 import code.name.monkey.retromusic.SHOW_WHEN_LOCKED
 import code.name.monkey.retromusic.SLEEP_TIMER_FINISH_SONG
@@ -146,7 +147,7 @@ object PreferenceUtil {
         CategoryInfo(CategoryInfo.Category.Playlists, false),
         CategoryInfo(CategoryInfo.Category.Genres, false),
         CategoryInfo(CategoryInfo.Category.Folder, false),
-        CategoryInfo(CategoryInfo.Category.Search, false)
+        CategoryInfo(CategoryInfo.Category.Search, true)
     )
 
     private val defaultDatabaseCategories = listOf(
@@ -161,6 +162,7 @@ object PreferenceUtil {
             CategoryInfo.Category.Home -> CategoryInfo(category, true)
             CategoryInfo.Category.Songs -> CategoryInfo(category, true)
             CategoryInfo.Category.Database -> CategoryInfo(category, true)
+            CategoryInfo.Category.Search -> CategoryInfo(category, true)
             else -> CategoryInfo(category, false)
         }
     }
@@ -199,6 +201,19 @@ object PreferenceUtil {
         return normalized
     }
 
+    private fun migrateSearchTabVisibility(categories: MutableList<CategoryInfo>): List<CategoryInfo> {
+        if (sharedPreferences.getBoolean(SEARCH_TAB_VISIBILITY_MIGRATED, false)) {
+            return categories
+        }
+        categories.firstOrNull { it.category == CategoryInfo.Category.Search }?.visible = true
+        val collectionType = object : TypeToken<List<CategoryInfo?>?>() {}.type
+        sharedPreferences.edit {
+            putBoolean(SEARCH_TAB_VISIBILITY_MIGRATED, true)
+            putString(LIBRARY_CATEGORIES, Gson().toJson(categories, collectionType))
+        }
+        return categories
+    }
+
     private fun normalizeDatabaseCategories(categories: List<CategoryInfo>): List<CategoryInfo> {
         val allowedCategories = listOf(
             CategoryInfo.Category.Playlists,
@@ -233,10 +248,12 @@ object PreferenceUtil {
                 gson.toJson(defaultCategories, collectionType)
             )
             return try {
-                normalizeCategories(Gson().fromJson(data, collectionType))
+                migrateSearchTabVisibility(
+                    normalizeCategories(Gson().fromJson(data, collectionType)).toMutableList()
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
-                return normalizeCategories(defaultCategories)
+                return migrateSearchTabVisibility(normalizeCategories(defaultCategories).toMutableList())
             }
         }
         set(value) {

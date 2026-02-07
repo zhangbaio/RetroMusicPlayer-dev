@@ -95,6 +95,12 @@ class SearchFragment : AbsMainActivityFragment(R.layout.fragment_search),
         }
         if (savedInstanceState != null) {
             query = savedInstanceState.getString(QUERY)
+        } else {
+            query = arguments?.getString(QUERY)
+        }
+        query?.takeIf { it.isNotBlank() }?.let { initialQuery ->
+            binding.searchView.setText(initialQuery)
+            binding.searchView.setSelection(initialQuery.length)
         }
         libraryViewModel.getSearchResult().observe(viewLifecycleOwner) {
             showData(it)

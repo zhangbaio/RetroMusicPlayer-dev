@@ -60,6 +60,9 @@ class MainActivity : AbsCastActivity() {
         val navController = findNavController(R.id.fragment_container)
         val navInflater = navController.navInflater
         val navGraph = navInflater.inflate(R.navigation.main_graph)
+        if (PreferenceUtil.lastTab == R.id.action_search) {
+            PreferenceUtil.lastTab = R.id.action_search_tab
+        }
 
         val categoryInfo: CategoryInfo = PreferenceUtil.libraryCategory.first { it.visible }
         if (categoryInfo.visible) {
@@ -92,7 +95,7 @@ class MainActivity : AbsCastActivity() {
                 currentFragment(R.id.fragment_container)?.enterTransition = null
             }
             when (destination.id) {
-                R.id.action_home, R.id.action_song, R.id.action_database, R.id.action_album, R.id.action_artist, R.id.action_folder, R.id.action_playlist, R.id.action_genre, R.id.action_search -> {
+                R.id.action_home, R.id.action_song, R.id.action_database, R.id.action_album, R.id.action_artist, R.id.action_folder, R.id.action_playlist, R.id.action_genre, R.id.action_search_tab -> {
                     // Save the last tab
                     if (PreferenceUtil.rememberLastTab) {
                         saveTab(destination.id)

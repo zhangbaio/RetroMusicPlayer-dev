@@ -45,5 +45,10 @@
         android:label=""
         tools:layout="@layout/fragment_home" />
 
+    <fragment
+        android:id="@+id/action_search_tab"
+        android:name="code.name.monkey.retromusic.fragments.search.SearchTabFragment"
+        tools:layout="@layout/fragment_search_tab" />
+
 
 </navigation>

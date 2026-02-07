@@ -76,6 +76,12 @@
         tools:layout="@layout/fragment_search" />
 
     <fragment
+        android:id="@+id/action_search_tab"
+        android:name="code.name.monkey.retromusic.fragments.search.SearchTabFragment"
+        android:label="SearchTabFragment"
+        tools:layout="@layout/fragment_search_tab" />
+
+    <fragment
         android:id="@+id/settings_fragment"
         android:name="code.name.monkey.retromusic.fragments.settings.SettingsFragment" />
 
