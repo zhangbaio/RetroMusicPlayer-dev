@@ -8,6 +8,7 @@ import code.name.monkey.retromusic.db.MIGRATION_23_24
 import code.name.monkey.retromusic.db.MIGRATION_24_25
 import code.name.monkey.retromusic.db.MIGRATION_25_26
 import code.name.monkey.retromusic.db.MIGRATION_27_28
+import code.name.monkey.retromusic.db.MIGRATION_28_29
 import code.name.monkey.retromusic.db.RetroDatabase
 import code.name.monkey.retromusic.fragments.LibraryViewModel
 import code.name.monkey.retromusic.fragments.albums.AlbumDetailsViewModel
@@ -52,7 +53,8 @@ private val roomModule = module {
                 MIGRATION_23_24,
                 MIGRATION_24_25,
                 MIGRATION_25_26,
-                MIGRATION_27_28
+                MIGRATION_27_28,
+                MIGRATION_28_29
             )
             .fallbackToDestructiveMigration()
             .build()

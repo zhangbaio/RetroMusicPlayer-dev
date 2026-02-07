@@ -14,6 +14,7 @@
  */
 package code.name.monkey.retromusic.db
 
+import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.model.Song
 
 fun List<HistoryEntity>.fromHistoryToSongs(): List<Song> {
@@ -43,6 +44,10 @@ fun Song.toHistoryEntity(timePlayed: Long): HistoryEntity {
         artistName = artistName,
         composer = composer,
         albumArtist = albumArtist,
+        sourceType = sourceType.name,
+        remotePath = remotePath,
+        webDavConfigId = webDavConfigId,
+        webDavAlbumArtPath = webDavAlbumArtPath,
         timePlayed = timePlayed
     )
 }
@@ -62,11 +67,17 @@ fun Song.toSongEntity(playListId: Long): SongEntity {
         artistId = artistId,
         artistName = artistName,
         composer = composer,
-        albumArtist = albumArtist
+        albumArtist = albumArtist,
+        sourceType = sourceType.name,
+        remotePath = remotePath,
+        webDavConfigId = webDavConfigId,
+        webDavAlbumArtPath = webDavAlbumArtPath
     )
 }
 
 fun SongEntity.toSong(): Song {
+    val resolvedSourceType = resolveSourceType(sourceType, data)
+    val resolvedRemotePath = resolveRemotePath(resolvedSourceType, remotePath, data)
     return Song(
         id = id,
         title = title,
@@ -80,11 +91,17 @@ fun SongEntity.toSong(): Song {
         artistId = artistId,
         artistName = artistName,
         composer = composer,
-        albumArtist = albumArtist
+        albumArtist = albumArtist,
+        sourceType = resolvedSourceType,
+        remotePath = resolvedRemotePath,
+        webDavConfigId = webDavConfigId,
+        webDavAlbumArtPath = webDavAlbumArtPath
     )
 }
 
 fun PlayCountEntity.toSong(): Song {
+    val resolvedSourceType = resolveSourceType(sourceType, data)
+    val resolvedRemotePath = resolveRemotePath(resolvedSourceType, remotePath, data)
     return Song(
         id = id,
         title = title,
@@ -98,11 +115,17 @@ fun PlayCountEntity.toSong(): Song {
         artistId = artistId,
         artistName = artistName,
         composer = composer,
-        albumArtist = albumArtist
+        albumArtist = albumArtist,
+        sourceType = resolvedSourceType,
+        remotePath = resolvedRemotePath,
+        webDavConfigId = webDavConfigId,
+        webDavAlbumArtPath = webDavAlbumArtPath
     )
 }
 
 fun HistoryEntity.toSong(): Song {
+    val resolvedSourceType = resolveSourceType(sourceType, data)
+    val resolvedRemotePath = resolveRemotePath(resolvedSourceType, remotePath, data)
     return Song(
         id = id,
         title = title,
@@ -116,7 +139,11 @@ fun HistoryEntity.toSong(): Song {
         artistId = artistId,
         artistName = artistName,
         composer = composer,
-        albumArtist = albumArtist
+        albumArtist = albumArtist,
+        sourceType = resolvedSourceType,
+        remotePath = resolvedRemotePath,
+        webDavConfigId = webDavConfigId,
+        webDavAlbumArtPath = webDavAlbumArtPath
     )
 }
 
@@ -135,9 +162,33 @@ fun Song.toPlayCount(): PlayCountEntity {
         artistName = artistName,
         composer = composer,
         albumArtist = albumArtist,
+        sourceType = sourceType.name,
+        remotePath = remotePath,
+        webDavConfigId = webDavConfigId,
+        webDavAlbumArtPath = webDavAlbumArtPath,
         timePlayed = System.currentTimeMillis(),
         playCount = 1
     )
+}
+
+private fun resolveSourceType(rawValue: String, data: String): SourceType {
+    return runCatching { SourceType.valueOf(rawValue) }.getOrNull()
+        ?: if (data.startsWith("http://") || data.startsWith("https://")) {
+            SourceType.WEBDAV
+        } else {
+            SourceType.LOCAL
+        }
+}
+
+private fun resolveRemotePath(sourceType: SourceType, remotePath: String?, data: String): String? {
+    if (!remotePath.isNullOrBlank()) {
+        return remotePath
+    }
+    return if (sourceType == SourceType.WEBDAV && (data.startsWith("http://") || data.startsWith("https://"))) {
+        data
+    } else {
+        null
+    }
 }
 
 fun List<Song>.toSongsEntity(playlistEntity: PlaylistEntity): List<SongEntity> {

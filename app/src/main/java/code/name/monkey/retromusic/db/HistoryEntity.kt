@@ -41,6 +41,14 @@ class HistoryEntity(
     val composer: String?,
     @ColumnInfo(name = "album_artist")
     val albumArtist: String?,
+    @ColumnInfo(name = "source_type")
+    val sourceType: String = "LOCAL",
+    @ColumnInfo(name = "remote_path")
+    val remotePath: String? = null,
+    @ColumnInfo(name = "web_dav_config_id")
+    val webDavConfigId: Long? = null,
+    @ColumnInfo(name = "web_dav_album_art_path")
+    val webDavAlbumArtPath: String? = null,
     @ColumnInfo(name = "time_played")
     val timePlayed: Long
 )

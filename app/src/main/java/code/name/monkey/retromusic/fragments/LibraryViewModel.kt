@@ -263,7 +263,8 @@ class LibraryViewModel(
 
     private suspend fun fetchPlayCountSongs() {
         repository.playCountSongs().forEach { song ->
-            if (!File(song.data).exists() || song.id == -1L) {
+            val isLocalSong = song.sourceType != SourceType.WEBDAV.name
+            if (isLocalSong && (!File(song.data).exists() || song.id == -1L)) {
                 repository.deleteSongInPlayCount(song)
             }
         }
@@ -301,7 +302,8 @@ class LibraryViewModel(
     fun observableHistorySongs(): LiveData<List<Song>> {
         viewModelScope.launch(IO) {
             repository.historySong().forEach { song ->
-                if (!File(song.data).exists() || song.id == -1L) {
+                val isLocalSong = song.sourceType != SourceType.WEBDAV.name
+                if (isLocalSong && (!File(song.data).exists() || song.id == -1L)) {
                     repository.deleteSongInHistory(song.id)
                 }
             }

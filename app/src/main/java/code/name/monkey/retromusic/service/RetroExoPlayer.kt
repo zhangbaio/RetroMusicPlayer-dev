@@ -109,7 +109,8 @@ class RetroExoPlayer(context: Context) : AudioManagerPlayback(context), Player.L
      * Create a MediaSource for the song, handling WebDAV authentication if needed
      */
     private suspend fun createMediaSource(song: Song): MediaSource {
-        return if (song.sourceType == SourceType.WEBDAV) {
+        val uriString = song.uri.toString()
+        return if (song.sourceType == SourceType.WEBDAV || uriString.startsWith("http://") || uriString.startsWith("https://")) {
             createWebDAVMediaSource(song)
         } else {
             createDefaultMediaSource(song)
@@ -120,7 +121,7 @@ class RetroExoPlayer(context: Context) : AudioManagerPlayback(context), Player.L
      * Create a MediaSource with WebDAV authentication
      */
     private suspend fun createWebDAVMediaSource(song: Song): MediaSource {
-        val configId = song.webDavConfigId
+        val configId = song.webDavConfigId ?: resolveWebDAVConfigIdFromUrl(song.uri.toString())
             ?: return createDefaultMediaSource(song)
 
         val config = webDAVRepository.getConfigById(configId)
@@ -138,6 +139,17 @@ class RetroExoPlayer(context: Context) : AudioManagerPlayback(context), Player.L
 
         return ProgressiveMediaSource.Factory(dataSourceFactory)
             .createMediaSource(MediaItem.fromUri(song.uri))
+    }
+
+    private suspend fun resolveWebDAVConfigIdFromUrl(url: String): Long? {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            return null
+        }
+        return webDAVRepository.getEnabledConfigs()
+            .firstOrNull { config ->
+                url.startsWith(config.serverUrl.trimEnd('/'), ignoreCase = true)
+            }
+            ?.id
     }
 
     /**

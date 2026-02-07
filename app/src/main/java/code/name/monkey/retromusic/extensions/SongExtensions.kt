@@ -7,15 +7,19 @@ import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.util.MusicUtil
 
-val Song.uri get() = when (sourceType) {
-    SourceType.LOCAL -> MusicUtil.getSongFileUri(songId = id)
-    SourceType.WEBDAV -> Uri.parse(remotePath)
-}
+val Song.uri
+    get() = when {
+        sourceType == SourceType.WEBDAV || data.startsWith("http://") || data.startsWith("https://") ->
+            Uri.parse(remotePath ?: data)
+        else -> MusicUtil.getSongFileUri(songId = id)
+    }
 
-val Song.albumArtUri get() = when (sourceType) {
-    SourceType.LOCAL -> MusicUtil.getMediaStoreAlbumCoverUri(albumId)
-    SourceType.WEBDAV -> remotePath?.let { Uri.parse(it) }
-}
+val Song.albumArtUri
+    get() = when {
+        sourceType == SourceType.WEBDAV || data.startsWith("http://") || data.startsWith("https://") ->
+            (webDavAlbumArtPath ?: remotePath ?: data).let(Uri::parse)
+        else -> MusicUtil.getMediaStoreAlbumCoverUri(albumId)
+    }
 
 fun ArrayList<Song>.toMediaSessionQueue(): List<QueueItem> {
     return map { song ->

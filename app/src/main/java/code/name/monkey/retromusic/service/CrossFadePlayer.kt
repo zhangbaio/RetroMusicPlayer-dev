@@ -152,11 +152,12 @@ class CrossFadePlayer(context: Context) : AudioManagerPlayback(context),
     ) {
         if (force) hasDataSource = false
         mIsInitialized = false
-        currentSongConfigId = song.webDavConfigId
+        val resolvedConfigId = song.webDavConfigId ?: resolveWebDAVConfigIdFromUrl(song.uri.toString())
+        currentSongConfigId = resolvedConfigId
         /* We've already set DataSource if initialized is true in setNextDataSource */
         if (!hasDataSource) {
             getCurrentPlayer()?.let {
-                setDataSourceImpl(it, song.uri.toString(), song.webDavConfigId) { success ->
+                setDataSourceImpl(it, song.uri.toString(), resolvedConfigId) { success ->
                     mIsInitialized = success
                     completion(success)
                 }
@@ -174,7 +175,8 @@ class CrossFadePlayer(context: Context) : AudioManagerPlayback(context),
         // As MusicPlayerRemote won't have access to the musicService
         nextDataSource = path.toString()
         // Also store the config ID if it's a WebDAV song
-        nextSongConfigId = MusicPlayerRemote.nextSong?.webDavConfigId
+        nextSongConfigId =
+            MusicPlayerRemote.nextSong?.webDavConfigId ?: resolveWebDAVConfigIdFromUrl(path.toString())
     }
 
     override fun setAudioSessionId(sessionId: Int): Boolean {
@@ -338,8 +340,10 @@ class CrossFadePlayer(context: Context) : AudioManagerPlayback(context),
                 // And MusicPlayerRemote don't have access to MusicService
                 if (nextSong != null && nextSong != Song.emptySong) {
                     nextDataSource = null
-                    nextSongConfigId = nextSong.webDavConfigId
-                    setDataSourceImpl(player, nextSong.uri.toString(), nextSong.webDavConfigId) { success ->
+                    val resolvedConfigId =
+                        nextSong.webDavConfigId ?: resolveWebDAVConfigIdFromUrl(nextSong.uri.toString())
+                    nextSongConfigId = resolvedConfigId
+                    setDataSourceImpl(player, nextSong.uri.toString(), resolvedConfigId) { success ->
                         if (success) switchPlayer()
                     }
 
@@ -387,11 +391,12 @@ class CrossFadePlayer(context: Context) : AudioManagerPlayback(context),
     ) {
         player.reset()
         try {
+            val resolvedConfigId = webDavConfigId ?: resolveWebDAVConfigIdFromUrl(path)
             if (path.startsWith("content://")) {
                 player.setDataSource(context, path.toUri())
-            } else if (webDavConfigId != null && (path.startsWith("http://") || path.startsWith("https://"))) {
+            } else if (resolvedConfigId != null && (path.startsWith("http://") || path.startsWith("https://"))) {
                 // WebDAV URL - need to add authentication headers
-                val headers = getWebDAVAuthHeaders(webDavConfigId)
+                val headers = getWebDAVAuthHeaders(resolvedConfigId)
                 if (headers != null) {
                     player.setDataSource(context, path.toUri(), headers)
                 } else {
@@ -420,6 +425,23 @@ class CrossFadePlayer(context: Context) : AudioManagerPlayback(context),
         }
         player.setOnCompletionListener(this)
         player.setOnErrorListener(this)
+    }
+
+    private fun resolveWebDAVConfigIdFromUrl(url: String): Long? {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            return null
+        }
+        return try {
+            runBlocking(Dispatchers.IO) {
+                webDAVRepository.getEnabledConfigs()
+                    .firstOrNull { config ->
+                        url.startsWith(config.serverUrl.trimEnd('/'), ignoreCase = true)
+                    }
+                    ?.id
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**

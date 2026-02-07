@@ -26,7 +26,7 @@ import androidx.room.RoomDatabase
         WebDAVConfigEntity::class,
         WebDAVSongEntity::class
     ],
-    version = 28,
+    version = 29,
     exportSchema = false
 )
 abstract class RetroDatabase : RoomDatabase() {
