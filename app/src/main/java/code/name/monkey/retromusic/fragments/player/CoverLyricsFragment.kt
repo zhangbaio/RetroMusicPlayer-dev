@@ -23,6 +23,7 @@ import code.name.monkey.retromusic.model.lyrics.Lyrics
 import code.name.monkey.retromusic.util.LyricUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
+import code.name.monkey.retromusic.webdav.WebDAVLyricUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.jaudiotagger.audio.exceptions.CannotReadException
@@ -103,12 +104,19 @@ class CoverLyricsFragment : AbsMusicServiceFragment(R.layout.fragment_cover_lyri
             lyrics = try {
                 val lrcFile: File? = LyricUtil.getSyncedLyricsFile(song)
                 val data: String = LyricUtil.getStringFromLrc(lrcFile)
-                Lyrics.parse(song,
-                    data.ifEmpty {
-                        // Get Embedded Lyrics
-                        LyricUtil.getEmbeddedSyncedLyrics(song.data)
+                val lyricsText = data.ifEmpty {
+                    LyricUtil.getEmbeddedSyncedLyrics(song.data)
+                }
+                if (lyricsText.isNullOrEmpty() && WebDAVLyricUtil.isWebDAVSong(song)) {
+                    val webdavLyrics = WebDAVLyricUtil.getSyncedLyrics(song)
+                    if (webdavLyrics != null) {
+                        Lyrics.parse(song, webdavLyrics)
+                    } else {
+                        null
                     }
-                )
+                } else {
+                    Lyrics.parse(song, lyricsText)
+                }
             } catch (err: FileNotFoundException) {
                 null
             } catch (e: CannotReadException) {

@@ -14,44 +14,23 @@
  */
 package code.name.monkey.retromusic.fragments.player.normal
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.ImageButton
 import android.widget.PopupMenu
 import android.widget.TextView
-import androidx.lifecycle.lifecycleScope
 import code.name.monkey.appthemehelper.util.ATHUtil
 import code.name.monkey.appthemehelper.util.ColorUtil
 import code.name.monkey.appthemehelper.util.MaterialValueHelper
-import code.name.monkey.appthemehelper.util.TintHelper
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.databinding.FragmentPlayerPlaybackControlsBinding
-import code.name.monkey.retromusic.dialogs.AddToPlaylistDialog
-import code.name.monkey.retromusic.dialogs.CreatePlaylistDialog
-import code.name.monkey.retromusic.dialogs.DeleteSongsDialog
-import code.name.monkey.retromusic.dialogs.PlaybackSpeedDialog
-import code.name.monkey.retromusic.dialogs.SleepTimerDialog
-import code.name.monkey.retromusic.dialogs.SongDetailDialog
 import code.name.monkey.retromusic.extensions.*
 import code.name.monkey.retromusic.fragments.base.AbsPlayerControlsFragment
-import code.name.monkey.retromusic.fragments.base.goToAlbum
-import code.name.monkey.retromusic.fragments.base.goToArtist
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
-import code.name.monkey.retromusic.repository.RealRepository
-import code.name.monkey.retromusic.repository.Repository
-import code.name.monkey.retromusic.util.MusicUtil
-import code.name.monkey.retromusic.util.NavigationUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
-import code.name.monkey.retromusic.util.RingtoneManager
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
 import com.google.android.material.slider.Slider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.koin.android.ext.android.get
-import org.koin.android.ext.android.inject
 
 class PlayerPlaybackControlsFragment :
     AbsPlayerControlsFragment(R.layout.fragment_player_playback_controls) {
@@ -59,7 +38,6 @@ class PlayerPlaybackControlsFragment :
     private var _binding: FragmentPlayerPlaybackControlsBinding? = null
     private val binding get() = _binding!!
 
-    private val repository: Repository by inject()
     private var isFavorite = false
 
     override val progressSlider: Slider
@@ -88,24 +66,56 @@ class PlayerPlaybackControlsFragment :
         _binding = FragmentPlayerPlaybackControlsBinding.bind(view)
 
         setUpPlayPauseFab()
+        setUpSongInfo()
+    }
+
+    private fun setUpSongInfo() {
         binding.title.isSelected = true
         binding.text.isSelected = true
-        binding.title.setOnClickListener {
-            goToAlbum(requireActivity())
-        }
-        binding.text.setOnClickListener {
-            goToArtist(requireActivity())
-        }
 
-        // Setup favorite button
         binding.songFavourite.setOnClickListener {
-            toggleFavorite()
+            // 调用父 Fragment 的 toggleFavorite 方法
+            (parentFragment as? PlayerFragment)?.onFavoriteToggled()
         }
 
-        // Setup menu button
         binding.songMenu.setOnClickListener { view ->
             showSongMenu(view)
         }
+    }
+
+    fun updateFavoriteIcon(isFav: Boolean) {
+        isFavorite = isFav
+        val icon = if (isFavorite) {
+            R.drawable.ic_favorite
+        } else {
+            R.drawable.ic_favorite_border
+        }
+        binding.songFavourite.setImageDrawable(
+            requireContext().getDrawable(icon)
+        )
+    }
+
+    private fun showSongMenu(view: View) {
+        val popupMenu = PopupMenu(requireContext(), view)
+        popupMenu.menuInflater.inflate(R.menu.menu_song_detail, popupMenu.menu)
+        popupMenu.setOnMenuItemClickListener { item ->
+            (parentFragment as? PlayerFragment)?.onMenuItemClick(item) ?: false
+        }
+        popupMenu.show()
+    }
+
+    fun updateSongInfo() {
+        val song = MusicPlayerRemote.currentSong
+        binding.title.text = song.title
+        binding.text.text = song.artistName
+    }
+
+    fun setSongInfoVisible(visible: Boolean) {
+        val visibility = if (visible) View.VISIBLE else View.INVISIBLE
+        binding.title.visibility = visibility
+        binding.text.visibility = visibility
+        binding.songFavourite.visibility = visibility
+        binding.songMenu.visibility = visibility
     }
 
     override fun setColor(color: MediaNotificationProcessor) {
@@ -139,32 +149,16 @@ class PlayerPlaybackControlsFragment :
         updatePrevNextColor()
     }
 
-    private fun updateSong() {
-        val song = MusicPlayerRemote.currentSong
-        binding.title.text = song.title
-        binding.text.text = song.artistName
-
-        if (PreferenceUtil.isSongInfo) {
-            binding.songInfo.text = getSongInfo(song)
-            binding.songInfo.show()
-        } else {
-            binding.songInfo.hide()
-        }
-    }
-
-
     override fun onServiceConnected() {
         updatePlayPauseDrawableState()
         updateRepeatState()
         updateShuffleState()
-        updateSong()
-        updateFavoriteState()
+        updateSongInfo()
     }
 
     override fun onPlayingMetaChanged() {
         super.onPlayingMetaChanged()
-        updateSong()
-        updateFavoriteState()
+        updateSongInfo()
     }
 
     override fun onPlayStateChanged() {
@@ -187,6 +181,14 @@ class PlayerPlaybackControlsFragment :
                 MusicPlayerRemote.resumePlaying()
             }
             it.showBounceAnimation()
+        }
+
+        binding.previousButton.setOnClickListener {
+            MusicPlayerRemote.playPreviousSong()
+        }
+
+        binding.nextButton.setOnClickListener {
+            MusicPlayerRemote.playNextSong()
         }
     }
 
@@ -218,119 +220,5 @@ class PlayerPlaybackControlsFragment :
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
-    }
-
-    private fun toggleFavorite() {
-        val song = MusicPlayerRemote.currentSong
-        lifecycleScope.launch(Dispatchers.IO) {
-            MusicUtil.toggleFavorite(song)
-            val newFavoriteState = MusicUtil.isFavorite(song)
-            withContext(Dispatchers.Main) {
-                isFavorite = newFavoriteState
-                updateFavoriteIcon()
-            }
-        }
-    }
-
-    private fun updateFavoriteState() {
-        val song = MusicPlayerRemote.currentSong
-        lifecycleScope.launch(Dispatchers.IO) {
-            val favorite = MusicUtil.isFavorite(song)
-            withContext(Dispatchers.Main) {
-                isFavorite = favorite
-                updateFavoriteIcon()
-            }
-        }
-    }
-
-    private fun updateFavoriteIcon() {
-        val icon = if (isFavorite) {
-            R.drawable.ic_favorite
-        } else {
-            R.drawable.ic_favorite_border
-        }
-        binding.songFavourite.setImageResource(icon)
-    }
-
-    private fun showSongMenu(view: View) {
-        val popup = PopupMenu(requireContext(), view)
-        popup.menuInflater.inflate(R.menu.menu_song_detail, popup.menu)
-        popup.setOnMenuItemClickListener { item ->
-            val song = MusicPlayerRemote.currentSong
-            when (item.itemId) {
-                R.id.action_add_to_playlist -> {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val playlists = get<RealRepository>().fetchPlaylists()
-                        withContext(Dispatchers.Main) {
-                            AddToPlaylistDialog.create(playlists, song)
-                                .show(childFragmentManager, "ADD_PLAYLIST")
-                        }
-                    }
-                    true
-                }
-                R.id.action_share -> {
-                    requireActivity().startActivity(
-                        Intent.createChooser(
-                            MusicUtil.createShareSongFileIntent(requireContext(), song),
-                            null
-                        )
-                    )
-                    true
-                }
-                R.id.action_go_to_album -> {
-                    goToAlbum(requireActivity())
-                    true
-                }
-                R.id.action_go_to_artist -> {
-                    goToArtist(requireActivity())
-                    true
-                }
-                R.id.action_playback_speed -> {
-                    PlaybackSpeedDialog.newInstance().show(childFragmentManager, "PLAYBACK_SETTINGS")
-                    true
-                }
-                R.id.action_sleep_timer -> {
-                    SleepTimerDialog().show(parentFragmentManager, "SLEEP_TIMER")
-                    true
-                }
-                R.id.action_equalizer -> {
-                    NavigationUtil.openEqualizer(requireActivity())
-                    true
-                }
-                R.id.action_go_to_drive_mode -> {
-                    NavigationUtil.gotoDriveMode(requireActivity())
-                    true
-                }
-                R.id.action_save_playing_queue -> {
-                    CreatePlaylistDialog.create(ArrayList(MusicPlayerRemote.playingQueue))
-                        .show(childFragmentManager, "ADD_TO_PLAYLIST")
-                    true
-                }
-                R.id.action_set_as_ringtone -> {
-                    requireContext().run {
-                        if (RingtoneManager.requiresDialog(this)) {
-                            RingtoneManager.showDialog(this)
-                        } else {
-                            RingtoneManager.setRingtone(this, song)
-                        }
-                    }
-                    true
-                }
-                R.id.action_details -> {
-                    SongDetailDialog.create(song).show(childFragmentManager, "SONG_DETAIL")
-                    true
-                }
-                R.id.action_clear_playing_queue -> {
-                    MusicPlayerRemote.clearQueue()
-                    true
-                }
-                R.id.action_delete_from_device -> {
-                    DeleteSongsDialog.create(song).show(childFragmentManager, "DELETE_SONGS")
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
     }
 }

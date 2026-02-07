@@ -51,6 +51,7 @@ import code.name.monkey.retromusic.util.CoverLyricsType
 import code.name.monkey.retromusic.util.LyricUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
+import code.name.monkey.retromusic.webdav.WebDAVLyricUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -78,6 +79,33 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
 
     var lyrics: Lyrics? = null
 
+    // 是否处于歌词模式（由外部 PlayerFragment 控制）
+    private var isInLyricsMode = false
+
+    /**
+     * 设置是否显示歌词模式
+     * @param showLyrics true 显示歌词，false 显示专辑封面
+     */
+    fun setLyricsMode(showLyrics: Boolean) {
+        isInLyricsMode = showLyrics
+        val nps = PreferenceUtil.nowPlayingScreen
+        if (nps == Normal) {
+            if (showLyrics) {
+                // 歌词模式：隐藏 ViewPager，显示歌词
+                binding.viewPager.isVisible = false
+                binding.lyricsView.isVisible = true
+                binding.coverLyrics.isVisible = false
+                progressViewUpdateHelper?.start()
+            } else {
+                // 封面模式：显示 ViewPager，隐藏歌词
+                binding.viewPager.isVisible = true
+                binding.lyricsView.isVisible = false
+                binding.coverLyrics.isVisible = false
+                progressViewUpdateHelper?.stop()
+            }
+        }
+    }
+
     fun removeSlideEffect() {
         val transformer = ParallaxPagerTransformer(R.id.player_image)
         transformer.setSpeed(0.3f)
@@ -98,6 +126,16 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
                 val embeddedLyrics = LyricUtil.getEmbeddedSyncedLyrics(song.data)
                 if (embeddedLyrics != null) {
                     binding.lyricsView.loadLrc(embeddedLyrics)
+                } else if (WebDAVLyricUtil.isWebDAVSong(song)) {
+                    val webdavLyrics = WebDAVLyricUtil.getSyncedLyrics(song)
+                    if (webdavLyrics != null) {
+                        binding.lyricsView.loadLrc(webdavLyrics)
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            binding.lyricsView.reset()
+                            binding.lyricsView.setLabel(context?.getString(R.string.no_lyrics_found))
+                        }
+                    }
                 } else {
                     withContext(Dispatchers.Main) {
                         binding.lyricsView.reset()
@@ -106,7 +144,6 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
                 }
             }
         }
-
     }
 
     override fun onUpdateProgressViews(progress: Int, total: Int) {
@@ -127,7 +164,9 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
                 true
             }
             setOnClickListener {
-                goToLyrics(requireActivity())
+                if (callbacks?.onLyricsClicked() != true) {
+                    goToLyrics(requireActivity())
+                }
             }
         }
     }
@@ -219,26 +258,67 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
     }
 
     private fun showLyrics(visible: Boolean) {
-        binding.coverLyrics.isVisible = false
-        binding.lyricsView.isVisible = false
+        val nps = PreferenceUtil.nowPlayingScreen
+        // For Normal player, respect the lyrics mode state
+        if (nps == Normal) {
+            if (isInLyricsMode) {
+                binding.viewPager.isVisible = false
+                binding.coverLyrics.isVisible = false
+                binding.lyricsView.isVisible = true
+            } else {
+                binding.viewPager.isVisible = true
+                binding.coverLyrics.isVisible = false
+                binding.lyricsView.isVisible = false
+            }
+            return
+        }
+
         binding.viewPager.isVisible = true
         val lyrics: View = if (PreferenceUtil.lyricsType == CoverLyricsType.REPLACE_COVER) {
+            binding.coverLyrics.isVisible = false
             ObjectAnimator.ofFloat(viewPager, View.ALPHA, if (visible) 0F else 1F).start()
             lrcView
         } else {
+            binding.lyricsView.isVisible = false
             ObjectAnimator.ofFloat(viewPager, View.ALPHA, 1F).start()
             binding.coverLyrics
         }
-        ObjectAnimator.ofFloat(lyrics, View.ALPHA, if (visible) 1F else 0F).apply {
-            doOnEnd {
-                lyrics.isVisible = visible
+
+        if (visible) {
+            // When showing, make visible first with alpha 0, then animate to alpha 1
+            lyrics.alpha = 0f
+            lyrics.isVisible = true
+            ObjectAnimator.ofFloat(lyrics, View.ALPHA, 1F).start()
+        } else {
+            // When hiding, animate to alpha 0, then make invisible
+            ObjectAnimator.ofFloat(lyrics, View.ALPHA, 0F).apply {
+                doOnEnd {
+                    lyrics.isVisible = false
+                }
+                start()
             }
-            start()
         }
     }
 
     private fun maybeInitLyrics() {
         val nps = PreferenceUtil.nowPlayingScreen
+        // For Normal player, respect the lyrics mode state
+        if (nps == Normal) {
+            if (isInLyricsMode) {
+                // 歌词模式：隐藏 ViewPager，显示歌词
+                binding.viewPager.isVisible = false
+                binding.lyricsView.isVisible = true
+                binding.coverLyrics.isVisible = false
+                progressViewUpdateHelper?.start()
+            } else {
+                // 封面模式：显示 ViewPager，隐藏歌词
+                binding.viewPager.isVisible = true
+                binding.lyricsView.isVisible = false
+                binding.coverLyrics.isVisible = false
+                progressViewUpdateHelper?.stop()
+            }
+            return
+        }
         // Don't show lyrics container for below conditions
         if (lyricViewNpsList.contains(nps) && PreferenceUtil.showLyrics) {
             showLyrics(true)
@@ -252,6 +332,8 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
     }
 
     private fun updatePlayingQueue() {
+        val nps = PreferenceUtil.nowPlayingScreen
+
         val adapter = binding.viewPager.adapter
         if (adapter is AlbumCoverPagerAdapter) {
             adapter.updateData(MusicPlayerRemote.playingQueue)
@@ -260,8 +342,13 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
                 parentFragmentManager,
                 MusicPlayerRemote.playingQueue
             )
-
         }
+
+        // For Normal player, show/hide viewPager based on lyrics mode
+        if (nps == Normal) {
+            binding.viewPager.isVisible = !isInLyricsMode
+        }
+
         binding.viewPager.setCurrentItem(MusicPlayerRemote.position, true)
         onPageSelected(MusicPlayerRemote.position)
     }
@@ -317,6 +404,12 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
         fun onColorChanged(color: MediaNotificationProcessor)
 
         fun onFavoriteToggled()
+
+        /**
+         * Called when lyrics view is clicked.
+         * @return true if handled, false to use default behavior (go to lyrics editor)
+         */
+        fun onLyricsClicked(): Boolean = false
     }
 
     companion object {

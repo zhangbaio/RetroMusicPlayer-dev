@@ -43,12 +43,16 @@ import code.name.monkey.retromusic.helper.MusicProgressViewUpdateHelper
 import code.name.monkey.retromusic.lyrics.LrcView
 import code.name.monkey.retromusic.model.AudioTagInfo
 import code.name.monkey.retromusic.model.Song
+import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.util.FileUtils
 import code.name.monkey.retromusic.util.LyricUtil
 import code.name.monkey.retromusic.util.UriUtil
+import code.name.monkey.retromusic.webdav.WebDAVLyricUtil
 import com.afollestad.materialdialogs.input.input
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import java.io.File
@@ -197,6 +201,10 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
 
     @SuppressLint("CheckResult")
     private fun editNormalLyrics(lyrics: String? = null) {
+        if (song.sourceType == SourceType.WEBDAV) {
+            editSyncedLyrics(lyrics)
+            return
+        }
         val file = File(song.data)
         val content = lyrics ?: try {
             AudioFileIO.read(file).tagOrCreateDefault.getFirst(FieldKey.LYRICS)
@@ -305,6 +313,18 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
     }
 
     private fun loadNormalLyrics() {
+        if (song.sourceType == SourceType.WEBDAV) {
+            GlobalScope.launch(Dispatchers.IO) {
+                val lyrics = WebDAVLyricUtil.getNormalLyrics(song)
+                withContext(Dispatchers.Main) {
+                    if (_binding == null) return@withContext
+                    binding.normalLyrics.isVisible = !lyrics.isNullOrEmpty()
+                    binding.noLyricsFound.isVisible = lyrics.isNullOrEmpty()
+                    binding.normalLyrics.text = lyrics ?: ""
+                }
+            }
+            return
+        }
         val file = File(song.data)
         val lyrics = try {
             AudioFileIO.read(file).tagOrCreateDefault.getFirst(FieldKey.LYRICS)
@@ -324,23 +344,47 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
         val lrcFile = LyricUtil.getSyncedLyricsFile(song)
         if (lrcFile != null) {
             binding.lyricsView.loadLrc(lrcFile)
-        } else {
-            val embeddedLyrics = LyricUtil.getEmbeddedSyncedLyrics(song.data)
-            if (embeddedLyrics != null) {
-                binding.lyricsView.loadLrc(embeddedLyrics)
-            } else {
-                binding.lyricsView.setLabel(getString(R.string.empty))
-                return false
-            }
+            return true
         }
-        return true
+        val embeddedLyrics = LyricUtil.getEmbeddedSyncedLyrics(song.data)
+        if (embeddedLyrics != null) {
+            binding.lyricsView.loadLrc(embeddedLyrics)
+            return true
+        }
+        if (song.sourceType == SourceType.WEBDAV) {
+            GlobalScope.launch(Dispatchers.IO) {
+                val webdavLyrics = WebDAVLyricUtil.getSyncedLyrics(song)
+                withContext(Dispatchers.Main) {
+                    if (_binding == null) return@withContext
+                    if (webdavLyrics != null) {
+                        binding.lyricsView.loadLrc(webdavLyrics)
+                        binding.lyricsView.isVisible = true
+                        binding.normalLyrics.isVisible = false
+                        binding.noLyricsFound.isVisible = false
+                        lyricsType = LyricsType.SYNCED_LYRICS
+                    }
+                }
+            }
+            // Return true to show lyricsView initially (will be updated async)
+            return false
+        }
+        binding.lyricsView.setLabel(getString(R.string.empty))
+        return false
     }
 
     private fun loadLyrics() {
         lyricsType = if (!loadLRCLyrics()) {
-            binding.lyricsView.isVisible = false
-            loadNormalLyrics()
-            LyricsType.NORMAL_LYRICS
+            if (song.sourceType == SourceType.WEBDAV) {
+                // WebDAV async loading in progress, show lyrics view as loading
+                binding.lyricsView.isVisible = true
+                binding.normalLyrics.isVisible = false
+                binding.noLyricsFound.isVisible = false
+                LyricsType.SYNCED_LYRICS
+            } else {
+                binding.lyricsView.isVisible = false
+                loadNormalLyrics()
+                LyricsType.NORMAL_LYRICS
+            }
         } else {
             binding.normalLyrics.isVisible = false
             binding.noLyricsFound.isVisible = false

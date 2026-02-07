@@ -8,13 +8,13 @@
     android:orientation="vertical"
     tools:ignore="MissingPrefix">
 
-    <!-- Song title and artist section with favorite and menu buttons -->
+    <!-- Song info section -->
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="32dp"
         android:ellipsize="marquee"
         android:focusable="true"
         android:freezesText="true"
@@ -69,7 +69,7 @@
         android:id="@+id/songMenu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
+        android:layout_marginEnd="4dp"
         android:background="?attr/roundSelector"
         android:padding="12dp"
         android:scaleType="fitCenter"
@@ -80,33 +80,33 @@
         app:tint="?attr/colorControlNormal"
         tools:ignore="MissingPrefix" />
 
-    <!-- Progress bar section -->
-    <com.google.android.material.textview.MaterialTextView
-        android:id="@+id/songCurrentProgress"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:minWidth="40dp"
-        android:singleLine="true"
-        android:textColor="?android:attr/textColorSecondary"
-        app:layout_constraintBottom_toBottomOf="@+id/progressSlider"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@id/progressSlider"
-        tools:text="0:00" />
-
+    <!-- Progress bar section - full width aligned with song info -->
     <com.google.android.material.slider.Slider
         android:id="@+id/progressSlider"
         style="@style/Widget.Retro.Slider"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
         android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
         android:maxHeight="2dp"
-        app:layout_constraintEnd_toStartOf="@id/songTotalTime"
-        app:layout_constraintStart_toEndOf="@id/songCurrentProgress"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/text"
         tools:ignore="RtlHardcoded,UnusedAttribute"
         tools:progress="20" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/songCurrentProgress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:minWidth="40dp"
+        android:singleLine="true"
+        android:textColor="?android:attr/textColorSecondary"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/progressSlider"
+        tools:text="0:00" />
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/songTotalTime"
@@ -117,9 +117,8 @@
         android:minWidth="40dp"
         android:singleLine="true"
         android:textColor="?android:attr/textColorSecondary"
-        app:layout_constraintBottom_toBottomOf="@+id/progressSlider"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@id/progressSlider"
+        app:layout_constraintTop_toBottomOf="@+id/progressSlider"
         tools:text="-4:37" />
 
     <!-- Hidden songInfo for compatibility -->
@@ -132,7 +131,7 @@
         app:layout_constraintTop_toBottomOf="@+id/progressSlider"
         tools:text="" />
 
-    <!-- Playback controls - only previous, play/pause, next -->
+    <!-- Playback controls -->
     <!-- Hidden repeatButton for compatibility -->
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/repeatButton"
@@ -165,12 +164,12 @@
         android:id="@+id/playPauseButton"
         android:layout_width="80dp"
         android:layout_height="80dp"
-        android:layout_marginTop="48dp"
+        android:layout_marginTop="16dp"
         android:background="@android:color/transparent"
         android:scaleType="centerInside"
         app:layout_constraintEnd_toStartOf="@+id/nextButton"
         app:layout_constraintStart_toEndOf="@+id/previousButton"
-        app:layout_constraintTop_toBottomOf="@+id/progressSlider"
+        app:layout_constraintTop_toBottomOf="@+id/songCurrentProgress"
         app:srcCompat="@drawable/ic_play_arrow_large"
         app:tint="?attr/colorControlNormal"
         tools:ignore="MissingPrefix" />

@@ -19,9 +19,14 @@ import android.animation.ValueAnimator
 import android.content.SharedPreferences
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import androidx.appcompat.widget.Toolbar
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import code.name.monkey.appthemehelper.util.ToolbarContentTintHelper
 import code.name.monkey.retromusic.R
@@ -30,14 +35,21 @@ import code.name.monkey.retromusic.databinding.FragmentPlayerBinding
 import code.name.monkey.retromusic.extensions.*
 import code.name.monkey.retromusic.fragments.base.AbsPlayerFragment
 import code.name.monkey.retromusic.fragments.player.PlayerAlbumCoverFragment
+import code.name.monkey.retromusic.glide.RetroGlideExtension
+import code.name.monkey.retromusic.glide.RetroGlideExtension.songCoverOptions
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.model.Song
+import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.ViewUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
 import code.name.monkey.retromusic.views.DrawableGradient
 import androidx.navigation.findNavController
 import androidx.navigation.navOptions
+import com.bumptech.glide.Glide
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     SharedPreferences.OnSharedPreferenceChangeListener {
@@ -51,6 +63,21 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
     private var _binding: FragmentPlayerBinding? = null
     private val binding get() = _binding!!
+
+    // Fullscreen lyrics mode
+    private var isFullscreenLyrics = false
+    private var isLyricsMode = false  // 歌词模式：点击歌词按钮后进入
+    private var isFavorite = false
+    private var fullscreenHandler: Handler? = null
+    private var fullscreenRunnable: Runnable? = null
+
+    companion object {
+        private const val FULLSCREEN_DELAY = 3000L // 3 seconds
+
+        fun newInstance(): PlayerFragment {
+            return PlayerFragment()
+        }
+    }
 
 
     private fun colorize(i: Int) {
@@ -108,6 +135,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         super.toggleFavorite(song)
         if (song.id == MusicPlayerRemote.currentSong.id) {
             updateIsFavorite()
+            updateHeaderFavoriteIcon()
         }
     }
 
@@ -120,6 +148,9 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         _binding = FragmentPlayerBinding.bind(view)
         setUpSubFragments()
         setUpPlayerToolbar()
+        setUpHeader()
+        initFullscreenTimer()
+        setupTapToExitFullscreen()
         startOrStopSnow(PreferenceUtil.isSnowFalling)
         updateLyricsIcon()
 
@@ -128,7 +159,223 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         binding.bottomToolbarContainer?.drawAboveSystemBars()
     }
 
+    private fun initFullscreenTimer() {
+        fullscreenHandler = Handler(Looper.getMainLooper())
+        fullscreenRunnable = Runnable {
+            // 只有在歌词模式下且正在播放时才进入全屏
+            if (isLyricsMode && MusicPlayerRemote.isPlaying && !isFullscreenLyrics) {
+                enterFullscreenLyrics()
+            }
+        }
+    }
+
+    private fun startFullscreenTimer() {
+        fullscreenHandler?.removeCallbacks(fullscreenRunnable!!)
+        // 只有在歌词模式下且正在播放时才启动计时器
+        if (isLyricsMode && MusicPlayerRemote.isPlaying && !isFullscreenLyrics) {
+            fullscreenHandler?.postDelayed(fullscreenRunnable!!, FULLSCREEN_DELAY)
+        }
+    }
+
+    private fun stopFullscreenTimer() {
+        fullscreenHandler?.removeCallbacks(fullscreenRunnable!!)
+    }
+
+    private fun setUpHeader() {
+        binding.headerTitle?.isSelected = true
+        binding.headerArtist?.isSelected = true
+
+        binding.headerTitle?.setOnClickListener {
+            goToAlbum(requireActivity())
+        }
+        binding.headerArtist?.setOnClickListener {
+            goToArtist(requireActivity())
+        }
+
+        binding.headerFavourite?.setOnClickListener {
+            toggleFavorite(MusicPlayerRemote.currentSong)
+        }
+
+        binding.headerMenu?.setOnClickListener { view ->
+            showSongMenu(view)
+        }
+
+        updateHeaderInfo()
+    }
+
+    private fun updateHeaderInfo() {
+        val song = MusicPlayerRemote.currentSong
+        binding.headerTitle?.setText(song.title)
+        binding.headerArtist?.setText(song.artistName)
+
+        binding.smallAlbumArt?.let { imageView ->
+            Glide.with(this)
+                .load(RetroGlideExtension.getSongModel(song))
+                .songCoverOptions(song)
+                .into(imageView)
+        }
+
+        updateHeaderFavoriteIcon()
+    }
+
+    private fun updateHeaderFavoriteIcon() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val favorite = libraryViewModel.isSongFavorite(MusicPlayerRemote.currentSong.id)
+            withContext(Dispatchers.Main) {
+                isFavorite = favorite
+                val icon = if (isFavorite) {
+                    R.drawable.ic_favorite
+                } else {
+                    R.drawable.ic_favorite_border
+                }
+                binding.headerFavourite?.setImageDrawable(
+                    requireContext().getDrawable(icon)
+                )
+            }
+        }
+    }
+
+    private fun showSongMenu(view: View) {
+        val popupMenu = android.widget.PopupMenu(requireContext(), view)
+        popupMenu.menuInflater.inflate(R.menu.menu_song_detail, popupMenu.menu)
+        popupMenu.setOnMenuItemClickListener { item ->
+            onMenuItemClick(item)
+        }
+        popupMenu.show()
+    }
+
+    private fun enterFullscreenLyrics() {
+        if (isFullscreenLyrics || _binding == null) return
+        isFullscreenLyrics = true
+
+        // 控制栏淡出动画
+        binding.playbackControlsFragment.animate()
+            .alpha(0f)
+            .translationY(binding.playbackControlsFragment.height.toFloat())
+            .setDuration(300L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .withEndAction {
+                binding.playbackControlsFragment.isVisible = false
+            }
+            .start()
+
+        binding.bottomToolbarContainer?.let { container ->
+            container.animate()
+                .alpha(0f)
+                .translationY(container.height.toFloat())
+                .setDuration(300L)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .withEndAction {
+                    container.isVisible = false
+                }
+                .start()
+        }
+
+        expandLyricsArea()
+        updateLyricsIcon()
+    }
+
+    private fun exitFullscreenLyrics() {
+        if (!isFullscreenLyrics || _binding == null) return
+        isFullscreenLyrics = false
+
+        collapseLyricsArea()
+
+        // Show controls immediately
+        binding.playbackControlsFragment.alpha = 1f
+        binding.playbackControlsFragment.translationY = 0f
+        binding.playbackControlsFragment.isVisible = true
+
+        binding.bottomToolbarContainer?.alpha = 1f
+        binding.bottomToolbarContainer?.translationY = 0f
+        binding.bottomToolbarContainer?.isVisible = true
+
+        updateLyricsIcon()
+
+        // Restart timer to re-enter fullscreen after 3 seconds
+        startFullscreenTimer()
+    }
+
+    private fun expandLyricsArea() {
+        if (_binding == null) return
+        val container = binding.playerContainer
+        if (container is ConstraintLayout) {
+            val constraintSet = ConstraintSet()
+            constraintSet.clone(container)
+            // 全屏：歌词区域扩展到底部
+            constraintSet.connect(
+                R.id.playerAlbumCoverFragment,
+                ConstraintSet.BOTTOM,
+                ConstraintSet.PARENT_ID,
+                ConstraintSet.BOTTOM
+            )
+            constraintSet.applyTo(container)
+        }
+    }
+
+    private fun collapseLyricsArea() {
+        if (_binding == null) return
+        val container = binding.playerContainer
+        if (container is ConstraintLayout) {
+            val constraintSet = ConstraintSet()
+            constraintSet.clone(container)
+            // 退出全屏：歌词区域到控制栏上方
+            constraintSet.connect(
+                R.id.playerAlbumCoverFragment,
+                ConstraintSet.BOTTOM,
+                R.id.playbackControlsFragment,
+                ConstraintSet.TOP
+            )
+            constraintSet.applyTo(container)
+        }
+    }
+
+    private fun updateAlbumCoverConstraints(lyricsMode: Boolean) {
+        if (_binding == null) return
+        val container = binding.playerContainer
+        if (container is ConstraintLayout) {
+            val constraintSet = ConstraintSet()
+            constraintSet.clone(container)
+            if (lyricsMode) {
+                // 歌词模式：playerAlbumCoverFragment 顶部约束到 songHeaderContainer 底部
+                constraintSet.connect(
+                    R.id.playerAlbumCoverFragment,
+                    ConstraintSet.TOP,
+                    R.id.songHeaderContainer,
+                    ConstraintSet.BOTTOM
+                )
+            } else {
+                // 封面模式：playerAlbumCoverFragment 顶部约束到 statusBarContainer 底部
+                constraintSet.connect(
+                    R.id.playerAlbumCoverFragment,
+                    ConstraintSet.TOP,
+                    R.id.statusBarContainer,
+                    ConstraintSet.BOTTOM
+                )
+            }
+            constraintSet.applyTo(container)
+        }
+    }
+
+    private fun setupTapToExitFullscreen() {
+        // Click handling is now done via onLyricsClicked() callback
+    }
+
+    override fun onLyricsClicked(): Boolean {
+        if (!isLyricsMode) return false
+        if (isFullscreenLyrics) {
+            // 全屏歌词模式 → 退出全屏，回到播放界面（保持歌词模式，3秒后再次进入全屏）
+            exitFullscreenLyrics()
+        } else {
+            // 非全屏但在歌词模式 → 退出歌词模式，回到封面界面
+            exitLyricsMode()
+        }
+        return true
+    }
+
     override fun onDestroyView() {
+        stopFullscreenTimer()
+        fullscreenHandler = null
         super.onDestroyView()
         PreferenceManager.getDefaultSharedPreferences(requireContext())
             .unregisterOnSharedPreferenceChangeListener(this)
@@ -164,22 +411,72 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     }
 
     private fun toggleLyrics() {
-        PreferenceUtil.showLyrics = !PreferenceUtil.showLyrics
-        updateLyricsIcon()
-        if (PreferenceUtil.lyricsScreenOn && PreferenceUtil.showLyrics) {
+        if (isLyricsMode) {
+            // 退出歌词模式
+            exitLyricsMode()
+        } else {
+            // 进入歌词模式，启动3秒计时器
+            enterLyricsMode()
+        }
+
+        if (PreferenceUtil.lyricsScreenOn && isLyricsMode) {
             mainActivity.keepScreenOn(true)
-        } else if (!PreferenceUtil.isScreenOnEnabled && !PreferenceUtil.showLyrics) {
+        } else if (!PreferenceUtil.isScreenOnEnabled && !isLyricsMode) {
             mainActivity.keepScreenOn(false)
         }
     }
 
+    private fun enterLyricsMode() {
+        isLyricsMode = true
+        // 显示歌曲头部信息（小专辑图+歌名+歌手+收藏+更多）
+        binding.songHeaderContainer?.isVisible = true
+        // 隐藏控制栏中的歌曲信息（标题、歌手、收藏、更多）
+        controlsFragment.setSongInfoVisible(false)
+        // 修改 playerAlbumCoverFragment 的顶部约束到 songHeaderContainer
+        updateAlbumCoverConstraints(lyricsMode = true)
+        // 通知 PlayerAlbumCoverFragment 显示歌词
+        val playerAlbumCoverFragment: PlayerAlbumCoverFragment = whichFragment(R.id.playerAlbumCoverFragment)
+        playerAlbumCoverFragment.setLyricsMode(true)
+        updateLyricsIcon()
+        // 启动3秒计时器，到时自动进入全屏
+        startFullscreenTimer()
+    }
+
+    private fun exitLyricsMode() {
+        isLyricsMode = false
+        stopFullscreenTimer()
+        if (isFullscreenLyrics) {
+            isFullscreenLyrics = false
+            // 恢复控制栏和底部工具栏
+            binding.playbackControlsFragment.alpha = 1f
+            binding.playbackControlsFragment.translationY = 0f
+            binding.playbackControlsFragment.isVisible = true
+            binding.bottomToolbarContainer?.alpha = 1f
+            binding.bottomToolbarContainer?.translationY = 0f
+            binding.bottomToolbarContainer?.isVisible = true
+        }
+        // 隐藏歌曲头部信息
+        binding.songHeaderContainer?.isVisible = false
+        // 显示控制栏中的歌曲信息
+        controlsFragment.setSongInfoVisible(true)
+        // 恢复 playerAlbumCoverFragment 的约束
+        updateAlbumCoverConstraints(lyricsMode = false)
+        // 通知 PlayerAlbumCoverFragment 显示封面
+        val playerAlbumCoverFragment: PlayerAlbumCoverFragment = whichFragment(R.id.playerAlbumCoverFragment)
+        playerAlbumCoverFragment.setLyricsMode(false)
+        updateLyricsIcon()
+    }
+
     private fun updateLyricsIcon() {
-        val icon = if (PreferenceUtil.showLyrics) {
+        // 歌词模式下显示填充图标，否则显示轮廓图标
+        val icon = if (isLyricsMode) {
             R.drawable.ic_lyrics
         } else {
             R.drawable.ic_lyrics_outline
         }
-        binding.actionLyrics?.setImageResource(icon)
+        binding.actionLyrics?.setImageDrawable(
+            requireContext().getDrawable(icon)
+        )
     }
 
     private fun openQueue() {
@@ -209,20 +506,39 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
     override fun onServiceConnected() {
         updateIsFavorite()
+        updateHeaderInfo()
+        // 只有在歌词模式下才启动计时器
+        if (isLyricsMode && MusicPlayerRemote.isPlaying) {
+            startFullscreenTimer()
+        }
     }
 
     override fun onPlayingMetaChanged() {
         updateIsFavorite()
+        updateHeaderInfo()
+    }
+
+    override fun onPlayStateChanged() {
+        super.onPlayStateChanged()
+        // 只有在歌词模式下才处理计时器
+        if (isLyricsMode) {
+            if (MusicPlayerRemote.isPlaying) {
+                startFullscreenTimer()
+            } else {
+                stopFullscreenTimer()
+            }
+        }
     }
 
     override fun playerToolbar(): Toolbar {
         return binding.playerToolbar
     }
 
-    companion object {
+    private fun goToAlbum(activity: android.app.Activity) {
+        code.name.monkey.retromusic.fragments.base.goToAlbum(activity)
+    }
 
-        fun newInstance(): PlayerFragment {
-            return PlayerFragment()
-        }
+    private fun goToArtist(activity: android.app.Activity) {
+        code.name.monkey.retromusic.fragments.base.goToArtist(activity)
     }
 }

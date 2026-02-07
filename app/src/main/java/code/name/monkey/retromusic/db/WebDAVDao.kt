@@ -81,6 +81,9 @@ interface WebDAVDao {
     @Query("DELETE FROM webdav_songs WHERE id = :songId")
     suspend fun deleteSongById(songId: Long)
 
+    @Query("DELETE FROM webdav_songs WHERE config_id = :configId AND remote_path LIKE :folderPath || '/%'")
+    suspend fun deleteSongsByFolder(configId: Long, folderPath: String)
+
     @Query("SELECT COUNT(*) FROM webdav_songs WHERE config_id = :configId")
     suspend fun getSongCount(configId: Long): Int
 

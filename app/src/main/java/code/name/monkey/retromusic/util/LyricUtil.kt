@@ -27,6 +27,11 @@ object LyricUtil {
     private val lrcRootPath =
         getExternalStorageDirectory().toString() + "/RetroMusic/lyrics/"
     private const val TAG = "LyricUtil"
+
+    fun isRemoteUrl(path: String): Boolean {
+        return path.startsWith("http://", ignoreCase = true) ||
+                path.startsWith("https://", ignoreCase = true)
+    }
     fun writeLrcToLoc(
         title: String, artist: String, lrcContext: String
     ): File? {
@@ -57,7 +62,7 @@ object LyricUtil {
         var writer: FileWriter? = null
         val location: File?
         try {
-            if (isLrcOriginalFileExist(song.data)) {
+            if (!isRemoteUrl(song.data) && isLrcOriginalFileExist(song.data)) {
                 location = getLocalLyricOriginalFile(song.data)
             } else if (isLrcFileExist(song.title, song.artistName)) {
                 location = getLocalLyricFile(song.title, song.artistName)
@@ -147,7 +152,7 @@ object LyricUtil {
 
     fun getSyncedLyricsFile(song: Song): File? {
         return when {
-            isLrcOriginalFileExist(song.data) -> {
+            !isRemoteUrl(song.data) && isLrcOriginalFileExist(song.data) -> {
                 getLocalLyricOriginalFile(song.data)
             }
             isLrcFileExist(song.title, song.artistName) -> {
@@ -160,6 +165,7 @@ object LyricUtil {
     }
 
     fun getEmbeddedSyncedLyrics(data: String): String? {
+        if (isRemoteUrl(data)) return null
         val embeddedLyrics = try {
             AudioFileIO.read(File(data)).tagOrCreateDefault.getFirst(FieldKey.LYRICS)
         } catch (e: Exception) {
@@ -168,6 +174,15 @@ object LyricUtil {
         return if (AbsSynchronizedLyrics.isSynchronized(embeddedLyrics)) {
             embeddedLyrics
         } else {
+            null
+        }
+    }
+
+    fun getEmbeddedLyrics(data: String): String? {
+        if (isRemoteUrl(data)) return null
+        return try {
+            AudioFileIO.read(File(data)).tagOrCreateDefault.getFirst(FieldKey.LYRICS)
+        } catch (e: Exception) {
             null
         }
     }

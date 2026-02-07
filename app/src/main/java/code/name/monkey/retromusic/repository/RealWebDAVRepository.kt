@@ -58,6 +58,25 @@ class RealWebDAVRepository(
     }
 
     override suspend fun saveConfig(config: WebDAVConfig): Long = withContext(Dispatchers.IO) {
+        // If updating an existing config, check for removed folders and delete their songs
+        if (config.id > 0) {
+            val oldConfig = webDAVDao.getConfigById(config.id)
+            if (oldConfig != null) {
+                val oldFolders = oldConfig.getMusicFoldersList().toSet()
+                val newFolders = config.musicFolders.toSet()
+                val removedFolders = oldFolders - newFolders
+                for (folder in removedFolders) {
+                    Log.d(TAG, "Folder removed: $folder, deleting songs")
+                    webDAVDao.deleteSongsByFolder(config.id, folder)
+                }
+                // If all folders are removed, delete all songs for this config
+                if (newFolders.isEmpty() && oldFolders.isNotEmpty()) {
+                    Log.d(TAG, "All folders removed, deleting all songs for config ${config.id}")
+                    webDAVDao.deleteSongsByConfig(config.id)
+                }
+            }
+        }
+
         // Encrypt password before saving
         val encryptedPassword = if (config.id > 0) {
             WebDAVCryptoUtil.encryptPassword(config.password, config.id)
@@ -122,16 +141,17 @@ class RealWebDAVRepository(
 
             val decryptedConfig = config.copy(password = decryptedPassword)
 
+            // If no folders configured, skip sync
+            if (config.musicFolders.isEmpty()) {
+                Log.d(TAG, "No music folders configured, skipping sync")
+                return@withContext Result.success(0)
+            }
+
             // Scan for audio files
             val webDAVClient = webDAVClient as? SardineWebDAVClient
                 ?: return@withContext Result.failure(Exception("Invalid WebDAV client type"))
 
-            // Scan only the configured music folders, not the root
-            val foldersToScan = if (config.musicFolders.isNotEmpty()) {
-                config.musicFolders
-            } else {
-                listOf("/") // Fallback to root if no folders configured
-            }
+            val foldersToScan = config.musicFolders
             Log.d(TAG, "Folders to scan: $foldersToScan")
 
             val audioFiles = mutableListOf<WebDAVFile>()

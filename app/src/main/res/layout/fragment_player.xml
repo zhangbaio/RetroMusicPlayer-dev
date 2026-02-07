@@ -2,6 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/playerContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?attr/colorSurface"
@@ -38,17 +39,120 @@
         <include layout="@layout/status_bar" />
     </FrameLayout>
 
+    <!-- Song header with small album art - shown in lyrics mode -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/songHeaderContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/statusBarContainer">
 
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/smallAlbumArt"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:scaleType="centerCrop"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:shapeAppearance="@style/ShapeAppearance.Material3.Corner.Medium"
+            tools:src="@tools:sample/avatars" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/headerTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:ellipsize="marquee"
+            android:focusable="true"
+            android:freezesText="true"
+            android:gravity="start"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:scrollHorizontally="true"
+            android:singleLine="true"
+            android:textAppearance="@style/TextViewHeadline6"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toTopOf="@+id/headerArtist"
+            app:layout_constraintEnd_toStartOf="@+id/headerFavourite"
+            app:layout_constraintStart_toEndOf="@+id/smallAlbumArt"
+            app:layout_constraintTop_toTopOf="@+id/smallAlbumArt"
+            app:layout_constraintVertical_chainStyle="packed"
+            tools:text="Song Title" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/headerArtist"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="4dp"
+            android:ellipsize="marquee"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:freezesText="true"
+            android:gravity="start"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:scrollHorizontally="true"
+            android:singleLine="true"
+            android:textAppearance="@style/TextViewBody1"
+            android:textColor="?android:attr/textColorSecondary"
+            app:layout_constraintBottom_toBottomOf="@+id/smallAlbumArt"
+            app:layout_constraintEnd_toStartOf="@+id/headerFavourite"
+            app:layout_constraintStart_toEndOf="@+id/smallAlbumArt"
+            app:layout_constraintTop_toBottomOf="@+id/headerTitle"
+            tools:text="Artist Name" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/headerFavourite"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/roundSelector"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/headerMenu"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_favorite_border"
+            app:tint="?attr/colorControlNormal"
+            tools:ignore="MissingPrefix" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/headerMenu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/roundSelector"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_more_vert"
+            app:tint="?attr/colorControlNormal"
+            tools:ignore="MissingPrefix" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Guideline to fix controls position (unaffected by lyrics mode) -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/controlsGuideline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.56" />
+
+    <!-- Album cover / Lyrics area -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/playerAlbumCoverFragment"
         android:name="code.name.monkey.retromusic.fragments.player.PlayerAlbumCoverFragment"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        app:layout_constraintBottom_toTopOf="@id/playbackControlsFragment"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHeight_percent="0.5"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/statusBarContainer" />
-
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/playbackControlsFragment"
@@ -58,11 +162,10 @@
         app:layout_constraintBottom_toTopOf="@id/bottomToolbarContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/playerAlbumCoverFragment"
+        app:layout_constraintTop_toTopOf="@id/controlsGuideline"
         tools:layout="@layout/fragment_player_playback_controls" />
 
-
-    <!-- Bottom toolbar with lyrics aligned to previous button, queue aligned to next button -->
+    <!-- Bottom toolbar with lyrics and queue buttons -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/bottomToolbarContainer"
         android:layout_width="match_parent"
