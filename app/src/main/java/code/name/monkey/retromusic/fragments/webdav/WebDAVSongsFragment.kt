@@ -125,14 +125,19 @@ class WebDAVSongsFragment : Fragment() {
                 is WebDAVUiState.Idle -> {
                     binding.progressBar.isVisible = false
                     binding.swipeRefreshLayout.isRefreshing = false
+                    binding.syncStatusText.isVisible = false
                 }
                 is WebDAVUiState.Syncing -> {
                     binding.progressBar.isVisible = true
                     binding.swipeRefreshLayout.isRefreshing = true
+                    binding.syncStatusText.isVisible = true
+                    binding.syncStatusText.text = getString(R.string.webdav_syncing)
                 }
                 is WebDAVUiState.SyncProgress -> {
                     binding.progressBar.isVisible = true
                     binding.swipeRefreshLayout.isRefreshing = true
+                    binding.syncStatusText.isVisible = true
+                    binding.syncStatusText.text = buildSyncProgressText(state)
                     if (state.configId == selectedConfigId || selectedConfigId == null) {
                         viewModel.loadSongs(selectedConfigId)
                     }
@@ -140,15 +145,27 @@ class WebDAVSongsFragment : Fragment() {
                 is WebDAVUiState.SyncComplete -> {
                     binding.progressBar.isVisible = false
                     binding.swipeRefreshLayout.isRefreshing = false
+                    binding.syncStatusText.isVisible = false
                     // Reload songs after sync
                     selectedConfigId?.let { viewModel.loadSongs(it) }
                 }
                 is WebDAVUiState.Error -> {
                     binding.progressBar.isVisible = false
                     binding.swipeRefreshLayout.isRefreshing = false
+                    binding.syncStatusText.isVisible = false
                 }
                 else -> {}
             }
+        }
+    }
+
+    private fun buildSyncProgressText(state: WebDAVUiState.SyncProgress): String {
+        val folderName = state.folderPath.substringAfterLast('/').ifBlank { state.folderPath }
+        val progressBase = "${state.completedFolders}/${state.totalFolders}"
+        return if (folderName.isBlank()) {
+            "Syncing $progressBase"
+        } else {
+            "Syncing $progressBase: $folderName"
         }
     }
 

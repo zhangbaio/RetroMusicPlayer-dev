@@ -64,6 +64,17 @@
 
             </com.google.android.material.card.MaterialCardView>
 
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/syncStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:textAppearance="@style/TextViewBody2"
+                android:textColor="?android:attr/textColorSecondary"
+                android:visibility="gone"
+                tools:text="Syncing 2/8: Rock" />
+
         </LinearLayout>
 
     </com.google.android.material.appbar.AppBarLayout>

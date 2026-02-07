@@ -33,6 +33,7 @@ import code.name.monkey.retromusic.webdav.WebDAVMetadataParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
@@ -347,6 +348,18 @@ class RealWebDAVRepository(
                 remainingBytes = MAX_DURATION_PROBE_TOTAL_BYTES_PER_SYNC
             )
 
+            if (scanFolders.isNotEmpty()) {
+                onProgress?.invoke(
+                    WebDAVSyncProgress(
+                        completedFolders = completedFolders,
+                        totalFolders = scanFolders.size,
+                        folderPath = scanFolders.firstOrNull().orEmpty(),
+                        syncedSongs = 0,
+                        failed = false
+                    )
+                )
+            }
+
             if (scanFolders.isEmpty()) {
                 Log.d(TAG, "Skipping remote scan, only folder selection changed (removed=$removedFolders)")
             } else {
@@ -633,6 +646,7 @@ class RealWebDAVRepository(
             )
             Result.success(totalSyncedSongs)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e(TAG, "Sync failed", e)
             Result.failure(e)
         }

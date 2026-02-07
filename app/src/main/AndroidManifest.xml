@@ -224,6 +224,10 @@
         </receiver>
 
         <receiver
+            android:name=".worker.WebDAVSyncControlReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".appwidgets.AppWidgetBig"
             android:exported="true"
             android:label="@string/app_widget_big_name">
@@ -318,6 +322,11 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <meta-data
             android:name="android.max_aspect"

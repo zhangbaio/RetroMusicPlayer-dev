@@ -107,38 +107,49 @@ class WebDAVSettingsFragment : Fragment(),
             when (state) {
                 is WebDAVUiState.Idle -> {
                     binding.progressBar.isVisible = false
+                    binding.syncStatusText.isVisible = false
                 }
                 is WebDAVUiState.TestingConnection -> {
                     binding.progressBar.isVisible = true
+                    binding.syncStatusText.isVisible = false
                 }
                 is WebDAVUiState.ConnectionSuccess -> {
                     binding.progressBar.isVisible = false
+                    binding.syncStatusText.isVisible = false
                     requireContext().showToast("Connection successful", Toast.LENGTH_SHORT)
                 }
                 is WebDAVUiState.Syncing -> {
                     binding.progressBar.isVisible = true
-                    requireContext().showToast("Syncing...", Toast.LENGTH_SHORT)
+                    binding.syncStatusText.isVisible = true
+                    binding.syncStatusText.text = getString(R.string.webdav_syncing)
                 }
                 is WebDAVUiState.SyncProgress -> {
                     binding.progressBar.isVisible = true
+                    binding.syncStatusText.isVisible = true
+                    binding.syncStatusText.text = buildSyncProgressText(state)
                 }
                 is WebDAVUiState.SyncComplete -> {
                     binding.progressBar.isVisible = false
+                    binding.syncStatusText.isVisible = false
                     requireContext().showToast(
                         "Synced ${state.count} songs",
                         Toast.LENGTH_SHORT
                     )
+                    viewModel.loadConfigs()
                 }
                 is WebDAVUiState.ConfigSaved -> {
                     binding.progressBar.isVisible = false
+                    binding.syncStatusText.isVisible = false
                     requireContext().showToast("Configuration saved", Toast.LENGTH_SHORT)
                 }
                 is WebDAVUiState.ConfigDeleted -> {
                     binding.progressBar.isVisible = false
+                    binding.syncStatusText.isVisible = false
                     requireContext().showToast("Configuration deleted", Toast.LENGTH_SHORT)
                 }
                 is WebDAVUiState.Error -> {
                     binding.progressBar.isVisible = false
+                    binding.syncStatusText.isVisible = false
                     requireContext().showToast(
                         "Error: ${state.message}",
                         Toast.LENGTH_LONG
@@ -338,6 +349,16 @@ class WebDAVSettingsFragment : Fragment(),
         val cleanPath = if (!path.startsWith("/")) "/$path" else path
         // Remove trailing slash for consistency
         return cleanPath.trimEnd('/')
+    }
+
+    private fun buildSyncProgressText(state: WebDAVUiState.SyncProgress): String {
+        val folderName = state.folderPath.substringAfterLast('/').ifBlank { state.folderPath }
+        val progressBase = "${state.completedFolders}/${state.totalFolders}"
+        return if (folderName.isBlank()) {
+            "Syncing $progressBase"
+        } else {
+            "Syncing $progressBase: $folderName"
+        }
     }
 
     private fun showFolderBrowserDialog(

@@ -602,6 +602,13 @@
     <string name="webdav_connection_failed">Connection failed</string>
     <string name="webdav_syncing">Syncing…</string>
     <string name="webdav_sync_complete">Synced %d songs</string>
+    <string name="webdav_sync_notification_title">WebDAV Sync</string>
+    <string name="webdav_retry_notification_title">WebDAV Retry Sync</string>
+    <string name="webdav_sync_notification_content">%1$d/%2$d folders · remaining %3$d · %4$s</string>
+    <string name="webdav_pause">Pause</string>
+    <string name="webdav_resume">Resume</string>
+    <string name="webdav_sync_paused_title">WebDAV sync paused</string>
+    <string name="webdav_sync_paused_content">Tap resume to continue from the last checkpoint.</string>
     <string name="webdav_config_saved">Configuration saved</string>
     <string name="webdav_config_deleted">Configuration deleted</string>
     <string name="webdav_fill_all_fields">Please fill all fields</string>
