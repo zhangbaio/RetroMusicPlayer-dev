@@ -297,6 +297,13 @@ class MusicService : MediaBrowserServiceCompat(),
     private var wakeLock: WakeLock? = null
     private var notificationManager: NotificationManager? = null
     private var isForeground = false
+    private val playbackProgressPersistRunnable = object : java.lang.Runnable {
+        override fun run() {
+            if (!isPlaying) return
+            persistPlaybackProgress()
+            uiThreadHandler?.postDelayed(this, PLAYBACK_PROGRESS_PERSIST_INTERVAL)
+        }
+    }
     override fun onCreate() {
         super.onCreate()
         val powerManager = getSystemService<PowerManager>()
@@ -348,6 +355,8 @@ class MusicService : MediaBrowserServiceCompat(),
     }
 
     override fun onDestroy() {
+        stopPlaybackProgressPersistence()
+        persistPlaybackProgress()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(widgetIntentReceiver)
         LocalBroadcastManager.getInstance(this).unregisterReceiver(updateFavoriteReceiver)
         unregisterReceiver(lockScreenReceiver)
@@ -367,6 +376,11 @@ class MusicService : MediaBrowserServiceCompat(),
         unregisterOnSharedPreferenceChangedListener(this)
         wakeLock?.release()
         sendBroadcast(Intent("$RETRO_MUSIC_PACKAGE_NAME.RETRO_MUSIC_SERVICE_DESTROYED"))
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        persistPlaybackProgress()
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun acquireWakeLock() {
@@ -866,6 +880,7 @@ class MusicService : MediaBrowserServiceCompat(),
     }
 
     fun quit() {
+        persistPlaybackProgress()
         pause()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         isForeground = false
@@ -980,9 +995,30 @@ class MusicService : MediaBrowserServiceCompat(),
     }
 
     fun savePositionInTrack() {
-        PreferenceManager.getDefaultSharedPreferences(this).edit {
-            putInt(SAVED_POSITION_IN_TRACK, songProgressMillis)
+        val progress = songProgressMillis
+        if (currentSong.id == -1L || progress < 0) {
+            return
         }
+        PreferenceManager.getDefaultSharedPreferences(this).edit {
+            putInt(SAVED_POSITION_IN_TRACK, progress)
+        }
+    }
+
+    private fun persistPlaybackProgress() {
+        savePosition()
+        savePositionInTrack()
+    }
+
+    private fun startPlaybackProgressPersistence() {
+        uiThreadHandler?.removeCallbacks(playbackProgressPersistRunnable)
+        uiThreadHandler?.postDelayed(
+            playbackProgressPersistRunnable,
+            PLAYBACK_PROGRESS_PERSIST_INTERVAL
+        )
+    }
+
+    private fun stopPlaybackProgressPersistence() {
+        uiThreadHandler?.removeCallbacks(playbackProgressPersistRunnable)
     }
 
     @Synchronized
@@ -1113,8 +1149,13 @@ class MusicService : MediaBrowserServiceCompat(),
             PLAY_STATE_CHANGED -> {
                 updateMediaSessionPlaybackState()
                 val isPlaying = isPlaying
-                if (!isPlaying && songProgressMillis > 0) {
-                    savePositionInTrack()
+                if (isPlaying) {
+                    startPlaybackProgressPersistence()
+                } else {
+                    stopPlaybackProgressPersistence()
+                    if (songProgressMillis > 0) {
+                        persistPlaybackProgress()
+                    }
                 }
                 songPlayCountHelper.notifyPlayStateChanged(isPlaying)
                 playingNotification?.setPlaying(isPlaying)
@@ -1438,6 +1479,7 @@ class MusicService : MediaBrowserServiceCompat(),
         const val REPEAT_MODE_NONE = 0
         const val REPEAT_MODE_ALL = 1
         const val REPEAT_MODE_THIS = 2
+        private const val PLAYBACK_PROGRESS_PERSIST_INTERVAL = 5_000L
         private const val MEDIA_SESSION_ACTIONS = (PlaybackStateCompat.ACTION_PLAY
                 or PlaybackStateCompat.ACTION_PAUSE
                 or PlaybackStateCompat.ACTION_PLAY_PAUSE
