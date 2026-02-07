@@ -93,6 +93,15 @@ interface WebDAVDao {
     @Query("SELECT COUNT(*) FROM webdav_songs WHERE config_id = :configId")
     suspend fun getSongCount(configId: Long): Int
 
+    @Query("SELECT * FROM webdav_songs WHERE config_id = :configId AND duration <= 0 ORDER BY file_size ASC, id ASC LIMIT :limit")
+    suspend fun getSongsMissingDuration(configId: Long, limit: Int): List<WebDAVSongEntity>
+
+    @Query("SELECT COUNT(*) FROM webdav_songs WHERE config_id = :configId AND duration <= 0")
+    suspend fun getSongsMissingDurationCount(configId: Long): Int
+
+    @Query("UPDATE webdav_songs SET duration = :duration WHERE id = :songId")
+    suspend fun updateSongDuration(songId: Long, duration: Long)
+
     @Query("SELECT COUNT(*) FROM webdav_songs")
     suspend fun getTotalSongCount(): Int
 }

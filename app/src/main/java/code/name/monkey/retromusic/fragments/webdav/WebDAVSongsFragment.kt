@@ -130,6 +130,13 @@ class WebDAVSongsFragment : Fragment() {
                     binding.progressBar.isVisible = true
                     binding.swipeRefreshLayout.isRefreshing = true
                 }
+                is WebDAVUiState.SyncProgress -> {
+                    binding.progressBar.isVisible = true
+                    binding.swipeRefreshLayout.isRefreshing = true
+                    if (state.configId == selectedConfigId || selectedConfigId == null) {
+                        viewModel.loadSongs(selectedConfigId)
+                    }
+                }
                 is WebDAVUiState.SyncComplete -> {
                     binding.progressBar.isVisible = false
                     binding.swipeRefreshLayout.isRefreshing = false

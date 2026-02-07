@@ -138,6 +138,10 @@ import java.io.File
 
 object PreferenceUtil {
     private val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(App.getContext())
+    private const val WEBDAV_SYNCED_FOLDERS_PREFIX = "webdav_synced_folders_"
+    private const val WEBDAV_FOLDER_SIGNATURES_PREFIX = "webdav_folder_signatures_"
+    private const val WEBDAV_FAILED_FOLDERS_PREFIX = "webdav_failed_folders_"
+    private const val WEBDAV_DIRECTORY_SUMMARIES_PREFIX = "webdav_directory_summaries_"
 
     val defaultCategories = listOf(
         CategoryInfo(CategoryInfo.Category.Home, true),
@@ -920,6 +924,94 @@ object PreferenceUtil {
     var lastWebDavValidationAt: Long
         get() = sharedPreferences.getLong(LAST_WEBDAV_VALIDATION_AT, 0L)
         set(value) = sharedPreferences.edit { putLong(LAST_WEBDAV_VALIDATION_AT, value) }
+
+    fun getWebDavSyncedFolders(configId: Long): Set<String> {
+        if (configId <= 0L) return emptySet()
+        val key = "$WEBDAV_SYNCED_FOLDERS_PREFIX$configId"
+        return sharedPreferences.getStringSet(key, emptySet()).orEmpty().toSet()
+    }
+
+    fun setWebDavSyncedFolders(configId: Long, folders: Set<String>) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_SYNCED_FOLDERS_PREFIX$configId"
+        sharedPreferences.edit {
+            putStringSet(key, folders.toSet())
+        }
+    }
+
+    fun clearWebDavSyncedFolders(configId: Long) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_SYNCED_FOLDERS_PREFIX$configId"
+        sharedPreferences.edit { remove(key) }
+    }
+
+    fun getWebDavFolderSignatures(configId: Long): Map<String, String> {
+        if (configId <= 0L) return emptyMap()
+        val key = "$WEBDAV_FOLDER_SIGNATURES_PREFIX$configId"
+        val json = sharedPreferences.getString(key, null) ?: return emptyMap()
+        return runCatching {
+            val type = object : TypeToken<Map<String, String>>() {}.type
+            Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
+        }.getOrElse { emptyMap() }
+    }
+
+    fun setWebDavFolderSignatures(configId: Long, signatures: Map<String, String>) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_FOLDER_SIGNATURES_PREFIX$configId"
+        sharedPreferences.edit {
+            putString(key, Gson().toJson(signatures))
+        }
+    }
+
+    fun clearWebDavFolderSignatures(configId: Long) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_FOLDER_SIGNATURES_PREFIX$configId"
+        sharedPreferences.edit { remove(key) }
+    }
+
+    fun getWebDavFailedFolders(configId: Long): Set<String> {
+        if (configId <= 0L) return emptySet()
+        val key = "$WEBDAV_FAILED_FOLDERS_PREFIX$configId"
+        return sharedPreferences.getStringSet(key, emptySet()).orEmpty().toSet()
+    }
+
+    fun setWebDavFailedFolders(configId: Long, folders: Set<String>) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_FAILED_FOLDERS_PREFIX$configId"
+        sharedPreferences.edit {
+            putStringSet(key, folders.toSet())
+        }
+    }
+
+    fun clearWebDavFailedFolders(configId: Long) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_FAILED_FOLDERS_PREFIX$configId"
+        sharedPreferences.edit { remove(key) }
+    }
+
+    fun getWebDavDirectorySummaries(configId: Long): Map<String, String> {
+        if (configId <= 0L) return emptyMap()
+        val key = "$WEBDAV_DIRECTORY_SUMMARIES_PREFIX$configId"
+        val json = sharedPreferences.getString(key, null) ?: return emptyMap()
+        return runCatching {
+            val type = object : TypeToken<Map<String, String>>() {}.type
+            Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
+        }.getOrElse { emptyMap() }
+    }
+
+    fun setWebDavDirectorySummaries(configId: Long, summaries: Map<String, String>) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_DIRECTORY_SUMMARIES_PREFIX$configId"
+        sharedPreferences.edit {
+            putString(key, Gson().toJson(summaries))
+        }
+    }
+
+    fun clearWebDavDirectorySummaries(configId: Long) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_DIRECTORY_SUMMARIES_PREFIX$configId"
+        sharedPreferences.edit { remove(key) }
+    }
 
     val isWhiteList: Boolean
         get() = sharedPreferences.getBoolean(WHITELIST_MUSIC, false)

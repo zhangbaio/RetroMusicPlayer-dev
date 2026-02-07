@@ -119,6 +119,9 @@ class WebDAVSettingsFragment : Fragment(),
                     binding.progressBar.isVisible = true
                     requireContext().showToast("Syncing...", Toast.LENGTH_SHORT)
                 }
+                is WebDAVUiState.SyncProgress -> {
+                    binding.progressBar.isVisible = true
+                }
                 is WebDAVUiState.SyncComplete -> {
                     binding.progressBar.isVisible = false
                     requireContext().showToast(

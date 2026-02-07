@@ -17,6 +17,19 @@ package code.name.monkey.retromusic.repository
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.model.WebDAVConfig
 
+data class WebDAVSyncProgress(
+    val completedFolders: Int,
+    val totalFolders: Int,
+    val folderPath: String,
+    val syncedSongs: Int,
+    val failed: Boolean
+)
+
+data class WebDAVDurationBackfillResult(
+    val updatedSongs: Int,
+    val remainingSongs: Int
+)
+
 /**
  * Repository interface for WebDAV operations
  */
@@ -57,9 +70,34 @@ interface WebDAVRepository {
      * Sync songs from a WebDAV server
      * Scans for audio files and updates the local cache
      * @param configId The ID of the configuration to sync
+     * @param onProgress Called whenever one folder scan has been committed to local DB
      * @return Result containing the number of songs synced
      */
-    suspend fun syncSongs(configId: Long): Result<Int>
+    suspend fun syncSongs(
+        configId: Long,
+        onProgress: (suspend (WebDAVSyncProgress) -> Unit)? = null
+    ): Result<Int>
+
+    /**
+     * Retry only previously failed folders from last WebDAV sync.
+     */
+    suspend fun syncFailedFolders(
+        configId: Long,
+        onProgress: (suspend (WebDAVSyncProgress) -> Unit)? = null
+    ): Result<Int>
+
+    /**
+     * Pending failed folders waiting for retry.
+     */
+    suspend fun getPendingFailedFolderCount(configId: Long): Int
+
+    /**
+     * Backfill missing song durations in small batches after sync.
+     */
+    suspend fun backfillDurations(
+        configId: Long,
+        limit: Int = 20
+    ): Result<WebDAVDurationBackfillResult>
 
     /**
      * Get all cached WebDAV songs

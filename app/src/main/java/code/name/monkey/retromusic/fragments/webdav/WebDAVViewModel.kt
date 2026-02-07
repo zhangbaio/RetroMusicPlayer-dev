@@ -14,20 +14,28 @@
  */
 package code.name.monkey.retromusic.fragments.webdav
 
+import androidx.lifecycle.asFlow
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.ExistingWorkPolicy
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.model.WebDAVConfig
 import code.name.monkey.retromusic.repository.WebDAVRepository
+import code.name.monkey.retromusic.worker.WebDAVSyncWorker
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
  * ViewModel for WebDAV configuration and song management
  */
 class WebDAVViewModel(
-    private val repository: WebDAVRepository
+    private val repository: WebDAVRepository,
+    private val workManager: WorkManager
 ) : ViewModel() {
 
     private val _configs = MutableLiveData<List<WebDAVConfig>>()
@@ -38,6 +46,7 @@ class WebDAVViewModel(
 
     private val _uiState = MutableLiveData<WebDAVUiState>(WebDAVUiState.Idle)
     val uiState: LiveData<WebDAVUiState> = _uiState
+    private var syncWorkObserverJob: Job? = null
 
     fun loadConfigs() {
         viewModelScope.launch {
@@ -110,16 +119,84 @@ class WebDAVViewModel(
         viewModelScope.launch {
             try {
                 _uiState.postValue(WebDAVUiState.Syncing)
-                val result = repository.syncSongs(configId)
-                if (result.isSuccess) {
-                    val count = result.getOrNull() ?: 0
-                    _uiState.postValue(WebDAVUiState.SyncComplete(count))
-                } else {
-                    _uiState.postValue(
-                        WebDAVUiState.Error(
-                            result.exceptionOrNull()?.message ?: "Sync failed"
-                        )
-                    )
+                val request = WebDAVSyncWorker.createRequest(configId)
+                workManager.enqueueUniqueWork(
+                    WebDAVSyncWorker.uniqueWorkName(configId),
+                    ExistingWorkPolicy.REPLACE,
+                    request
+                )
+
+                syncWorkObserverJob?.cancel()
+                syncWorkObserverJob = viewModelScope.launch {
+                    workManager.getWorkInfoByIdLiveData(request.id).asFlow().collect { info ->
+                        if (info == null) return@collect
+                        when (info.state) {
+                            WorkInfo.State.ENQUEUED,
+                            WorkInfo.State.BLOCKED -> {
+                                _uiState.postValue(WebDAVUiState.Syncing)
+                            }
+
+                            WorkInfo.State.RUNNING -> {
+                                val completed = info.progress.getInt(
+                                    WebDAVSyncWorker.KEY_PROGRESS_COMPLETED_FOLDERS,
+                                    0
+                                )
+                                val total = info.progress.getInt(
+                                    WebDAVSyncWorker.KEY_PROGRESS_TOTAL_FOLDERS,
+                                    0
+                                )
+                                if (total > 0) {
+                                    _uiState.postValue(
+                                        WebDAVUiState.SyncProgress(
+                                            configId = configId,
+                                            completedFolders = completed,
+                                            totalFolders = total,
+                                            folderPath = info.progress.getString(
+                                                WebDAVSyncWorker.KEY_PROGRESS_FOLDER_PATH
+                                            ).orEmpty(),
+                                            syncedSongs = info.progress.getInt(
+                                                WebDAVSyncWorker.KEY_PROGRESS_SYNCED_SONGS,
+                                                0
+                                            ),
+                                            failed = info.progress.getBoolean(
+                                                WebDAVSyncWorker.KEY_PROGRESS_FAILED,
+                                                false
+                                            )
+                                        )
+                                    )
+                                } else {
+                                    _uiState.postValue(WebDAVUiState.Syncing)
+                                }
+                            }
+
+                            WorkInfo.State.SUCCEEDED -> {
+                                _uiState.postValue(
+                                    WebDAVUiState.SyncComplete(
+                                        info.outputData.getInt(
+                                            WebDAVSyncWorker.KEY_OUTPUT_SYNCED_COUNT,
+                                            0
+                                        )
+                                    )
+                                )
+                                cancel()
+                            }
+
+                            WorkInfo.State.FAILED -> {
+                                _uiState.postValue(
+                                    WebDAVUiState.Error(
+                                        info.outputData.getString(WebDAVSyncWorker.KEY_OUTPUT_ERROR)
+                                            ?: "Sync failed"
+                                    )
+                                )
+                                cancel()
+                            }
+
+                            WorkInfo.State.CANCELLED -> {
+                                _uiState.postValue(WebDAVUiState.Error("Sync cancelled"))
+                                cancel()
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.postValue(WebDAVUiState.Error(e.message ?: "Sync failed"))
@@ -148,6 +225,11 @@ class WebDAVViewModel(
     fun clearState() {
         _uiState.postValue(WebDAVUiState.Idle)
     }
+
+    override fun onCleared() {
+        syncWorkObserverJob?.cancel()
+        super.onCleared()
+    }
 }
 
 /**
@@ -158,6 +240,14 @@ sealed class WebDAVUiState {
     object TestingConnection : WebDAVUiState()
     object ConnectionSuccess : WebDAVUiState()
     object Syncing : WebDAVUiState()
+    data class SyncProgress(
+        val configId: Long,
+        val completedFolders: Int,
+        val totalFolders: Int,
+        val folderPath: String,
+        val syncedSongs: Int,
+        val failed: Boolean
+    ) : WebDAVUiState()
     data class SyncComplete(val count: Int) : WebDAVUiState()
     object ConfigSaved : WebDAVUiState()
     object ConfigDeleted : WebDAVUiState()

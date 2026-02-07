@@ -66,5 +66,11 @@ data class WebDAVSongEntity(
     val fileSize: Long = 0,
 
     @ColumnInfo(name = "content_type")
-    val contentType: String = "audio/mpeg"
+    val contentType: String = "audio/mpeg",
+
+    @ColumnInfo(name = "remote_last_modified")
+    val remoteLastModified: Long = 0L,
+
+    @ColumnInfo(name = "file_fingerprint")
+    val fileFingerprint: String = ""
 ) : Parcelable
