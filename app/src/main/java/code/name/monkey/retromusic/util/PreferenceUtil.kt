@@ -142,6 +142,8 @@ object PreferenceUtil {
     private const val WEBDAV_FOLDER_SIGNATURES_PREFIX = "webdav_folder_signatures_"
     private const val WEBDAV_FAILED_FOLDERS_PREFIX = "webdav_failed_folders_"
     private const val WEBDAV_DIRECTORY_SUMMARIES_PREFIX = "webdav_directory_summaries_"
+    private const val WEBDAV_SYNC_CHECKPOINT_FOLDERS_PREFIX = "webdav_sync_checkpoint_folders_"
+    private const val WEBDAV_SYNC_CHECKPOINT_SCOPE_PREFIX = "webdav_sync_checkpoint_scope_"
 
     val defaultCategories = listOf(
         CategoryInfo(CategoryInfo.Category.Home, true),
@@ -1011,6 +1013,44 @@ object PreferenceUtil {
         if (configId <= 0L) return
         val key = "$WEBDAV_DIRECTORY_SUMMARIES_PREFIX$configId"
         sharedPreferences.edit { remove(key) }
+    }
+
+    fun getWebDavSyncCheckpointFolders(configId: Long): Set<String> {
+        if (configId <= 0L) return emptySet()
+        val key = "$WEBDAV_SYNC_CHECKPOINT_FOLDERS_PREFIX$configId"
+        return sharedPreferences.getStringSet(key, emptySet()).orEmpty().toSet()
+    }
+
+    fun setWebDavSyncCheckpointFolders(configId: Long, folders: Set<String>) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_SYNC_CHECKPOINT_FOLDERS_PREFIX$configId"
+        sharedPreferences.edit {
+            putStringSet(key, folders.toSet())
+        }
+    }
+
+    fun getWebDavSyncCheckpointScope(configId: Long): String {
+        if (configId <= 0L) return ""
+        val key = "$WEBDAV_SYNC_CHECKPOINT_SCOPE_PREFIX$configId"
+        return sharedPreferences.getString(key, "").orEmpty()
+    }
+
+    fun setWebDavSyncCheckpointScope(configId: Long, scope: String) {
+        if (configId <= 0L) return
+        val key = "$WEBDAV_SYNC_CHECKPOINT_SCOPE_PREFIX$configId"
+        sharedPreferences.edit {
+            putString(key, scope)
+        }
+    }
+
+    fun clearWebDavSyncCheckpoint(configId: Long) {
+        if (configId <= 0L) return
+        val foldersKey = "$WEBDAV_SYNC_CHECKPOINT_FOLDERS_PREFIX$configId"
+        val scopeKey = "$WEBDAV_SYNC_CHECKPOINT_SCOPE_PREFIX$configId"
+        sharedPreferences.edit {
+            remove(foldersKey)
+            remove(scopeKey)
+        }
     }
 
     val isWhiteList: Boolean

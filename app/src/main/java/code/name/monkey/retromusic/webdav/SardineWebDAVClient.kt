@@ -25,13 +25,12 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import java.io.IOException
 import java.net.URLDecoder
 import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * WebDAV client implementation using the Sardine library
@@ -42,6 +41,53 @@ class SardineWebDAVClient : WebDAVClient {
         val audioFiles: List<WebDAVFile>,
         val folderCoverMap: Map<String, String>
     )
+
+    private class AdaptiveScanState(initialParallelism: Int) {
+        private val targetParallelism = AtomicInteger(initialParallelism.coerceIn(1, MAX_DIRECTORY_SCAN_PARALLELISM))
+        private val activeRequests = AtomicInteger(0)
+        private val successStreak = AtomicInteger(0)
+        private val timeoutStreak = AtomicInteger(0)
+
+        suspend fun <T> withRequestPermit(block: suspend () -> T): T {
+            while (true) {
+                val target = targetParallelism.get()
+                val active = activeRequests.get()
+                if (active < target && activeRequests.compareAndSet(active, active + 1)) {
+                    break
+                }
+                delay(20)
+            }
+            try {
+                return block()
+            } finally {
+                activeRequests.decrementAndGet()
+            }
+        }
+
+        fun onTimeout() {
+            successStreak.set(0)
+            val timeouts = timeoutStreak.incrementAndGet()
+            if (timeouts >= 2) {
+                targetParallelism.updateAndGet { current ->
+                    (current - 1).coerceAtLeast(1)
+                }
+                timeoutStreak.set(0)
+            }
+        }
+
+        fun onSuccess() {
+            timeoutStreak.set(0)
+            val successes = successStreak.incrementAndGet()
+            if (successes >= 10) {
+                targetParallelism.updateAndGet { current ->
+                    (current + 1).coerceAtMost(MAX_DIRECTORY_SCAN_PARALLELISM)
+                }
+                successStreak.set(0)
+            }
+        }
+
+        fun currentParallelism(): Int = targetParallelism.get()
+    }
 
     override suspend fun testConnection(config: WebDAVConfig): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -73,7 +119,12 @@ class SardineWebDAVClient : WebDAVClient {
         path: String
     ): List<WebDAVFile> = withContext(Dispatchers.IO) {
         val sardine = createSardine(config)
-        val resources = listResourcesWithRetry(config, sardine, path)
+        val resources = listResourcesWithRetry(
+            config = config,
+            sardine = sardine,
+            path = path,
+            adaptiveState = AdaptiveScanState(stableDirectoryScanParallelism)
+        )
 
         // Skip the first item which is the directory itself
         resources.drop(1).map { resource ->
@@ -123,7 +174,9 @@ class SardineWebDAVClient : WebDAVClient {
     companion object {
         private const val TAG = "SardineWebDAVClient"
         private const val MAX_RECURSION_DEPTH = 20
-        private const val DIRECTORY_SCAN_PARALLELISM = 2
+        private const val MAX_DIRECTORY_SCAN_PARALLELISM = 3
+        private const val MIN_DIRECTORY_SCAN_PARALLELISM = 1
+        private const val DEFAULT_DIRECTORY_SCAN_PARALLELISM = 2
         private const val LIST_RETRY_COUNT = 3
         private const val LIST_RETRY_DELAY_MS = 800L
 
@@ -137,6 +190,9 @@ class SardineWebDAVClient : WebDAVClient {
             "cover.png", "album.png", "folder.png",
             "cover.webp", "album.webp", "folder.webp"
         )
+
+        @Volatile
+        private var stableDirectoryScanParallelism = DEFAULT_DIRECTORY_SCAN_PARALLELISM
     }
 
     /**
@@ -150,20 +206,20 @@ class SardineWebDAVClient : WebDAVClient {
         path: String = "/"
     ): ScanAudioResult =
         withContext(Dispatchers.IO) {
+            val adaptiveState = AdaptiveScanState(stableDirectoryScanParallelism)
             val parallelAttempt = runCatching {
                 val visitedPaths = Collections.synchronizedSet(mutableSetOf<String>())
-                val semaphore = Semaphore(DIRECTORY_SCAN_PARALLELISM)
                 val sardine = createSardine(config)
                 scanDirectoryRecursive(
                     config = config,
                     path = path,
                     visitedPaths = visitedPaths,
                     depth = 0,
-                    semaphore = semaphore,
+                    adaptiveState = adaptiveState,
                     sardine = sardine
                 )
             }
-            parallelAttempt.getOrElse { error ->
+            val result = parallelAttempt.getOrElse { error ->
                 if (!shouldFallbackToSerialScan(error)) {
                     throw error
                 }
@@ -173,15 +229,21 @@ class SardineWebDAVClient : WebDAVClient {
                 )
                 val visitedPaths = Collections.synchronizedSet(mutableSetOf<String>())
                 val sardine = createSardine(config)
-                scanDirectoryRecursive(
+                val serialState = AdaptiveScanState(MIN_DIRECTORY_SCAN_PARALLELISM)
+                val serialResult = scanDirectoryRecursive(
                     config = config,
                     path = path,
                     visitedPaths = visitedPaths,
                     depth = 0,
-                    semaphore = Semaphore(1),
+                    adaptiveState = serialState,
                     sardine = sardine
                 )
+                stableDirectoryScanParallelism = serialState.currentParallelism()
+                serialResult
             }
+            stableDirectoryScanParallelism = adaptiveState.currentParallelism()
+                .coerceIn(MIN_DIRECTORY_SCAN_PARALLELISM, MAX_DIRECTORY_SCAN_PARALLELISM)
+            result
         }
 
     suspend fun buildFolderQuickSignature(
@@ -211,7 +273,7 @@ class SardineWebDAVClient : WebDAVClient {
         path: String,
         visitedPaths: MutableSet<String>,
         depth: Int,
-        semaphore: Semaphore,
+        adaptiveState: AdaptiveScanState,
         sardine: OkHttpSardine
     ): ScanAudioResult = coroutineScope {
         // Normalize path for comparison
@@ -231,8 +293,8 @@ class SardineWebDAVClient : WebDAVClient {
 
         Log.d(TAG, "Scanning directory depth=$depth path='$path'")
 
-        val files = semaphore.withPermit {
-            listFilesWithSardine(config, sardine, path)
+        val files = adaptiveState.withRequestPermit {
+            listFilesWithSardine(config, sardine, path, adaptiveState)
         }
         Log.d(TAG, "Listed ${files.size} items in '$path'")
 
@@ -249,7 +311,7 @@ class SardineWebDAVClient : WebDAVClient {
                             path = file.path,
                             visitedPaths = visitedPaths,
                             depth = depth + 1,
-                            semaphore = semaphore,
+                            adaptiveState = adaptiveState,
                             sardine = sardine
                         )
                     }.getOrElse { error ->
@@ -283,9 +345,10 @@ class SardineWebDAVClient : WebDAVClient {
     private suspend fun listFilesWithSardine(
         config: WebDAVConfig,
         sardine: OkHttpSardine,
-        path: String
+        path: String,
+        adaptiveState: AdaptiveScanState
     ): List<WebDAVFile> {
-        val resources = listResourcesWithRetry(config, sardine, path)
+        val resources = listResourcesWithRetry(config, sardine, path, adaptiveState)
         return resources.drop(1).map { resource ->
             resourceToWebDAVFile(resource, path)
         }
@@ -294,7 +357,8 @@ class SardineWebDAVClient : WebDAVClient {
     private suspend fun listResourcesWithRetry(
         config: WebDAVConfig,
         sardine: OkHttpSardine,
-        path: String
+        path: String,
+        adaptiveState: AdaptiveScanState
     ): List<DavResource> {
         val url = buildUrl(config, path)
         var lastError: Exception? = null
@@ -303,10 +367,16 @@ class SardineWebDAVClient : WebDAVClient {
                 Log.d(TAG, "Listing files at: $url (attempt ${attempt + 1}/$LIST_RETRY_COUNT)")
                 val resources = sardine.list(url)
                 Log.d(TAG, "Found ${resources.size} resources")
+                adaptiveState.onSuccess()
+                stableDirectoryScanParallelism = adaptiveState.currentParallelism()
                 return resources
             } catch (error: Exception) {
                 lastError = error
                 val retryable = error is SocketTimeoutException || error is IOException
+                if (error is SocketTimeoutException) {
+                    adaptiveState.onTimeout()
+                    stableDirectoryScanParallelism = adaptiveState.currentParallelism()
+                }
                 val hasNext = attempt < LIST_RETRY_COUNT - 1
                 if (!retryable || !hasNext) {
                     throw error

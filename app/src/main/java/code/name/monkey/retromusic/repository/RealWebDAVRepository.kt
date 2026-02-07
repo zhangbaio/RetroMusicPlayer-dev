@@ -145,6 +145,7 @@ class RealWebDAVRepository(
                 PreferenceUtil.clearWebDavFolderSignatures(config.id)
                 PreferenceUtil.clearWebDavFailedFolders(config.id)
                 PreferenceUtil.clearWebDavDirectorySummaries(config.id)
+                PreferenceUtil.clearWebDavSyncCheckpoint(config.id)
             }
         }
 
@@ -159,6 +160,7 @@ class RealWebDAVRepository(
         PreferenceUtil.clearWebDavFolderSignatures(config.id)
         PreferenceUtil.clearWebDavFailedFolders(config.id)
         PreferenceUtil.clearWebDavDirectorySummaries(config.id)
+        PreferenceUtil.clearWebDavSyncCheckpoint(config.id)
     }
 
     override suspend fun testConnection(config: WebDAVConfig): Result<Boolean> =
@@ -265,6 +267,7 @@ class RealWebDAVRepository(
                 PreferenceUtil.clearWebDavFolderSignatures(configId)
                 PreferenceUtil.clearWebDavFailedFolders(configId)
                 PreferenceUtil.clearWebDavDirectorySummaries(configId)
+                PreferenceUtil.clearWebDavSyncCheckpoint(configId)
                 val updatedConfig = config.copy(lastSynced = System.currentTimeMillis())
                 saveConfig(updatedConfig)
                 return@withContext Result.success(0)
@@ -288,7 +291,7 @@ class RealWebDAVRepository(
                 ?: return@withContext Result.failure(Exception("Invalid WebDAV client type"))
 
             val retryFoldersInOrder = selectedFolders.filter { it in queuedFailedFolders }
-            val scanFolders = when {
+            val plannedScanFolders = when {
                 retryFailedOnly -> retryFoldersInOrder
                 isFirstSync -> selectedFolders
                 addedFolders.isNotEmpty() -> addedFolders
@@ -296,10 +299,37 @@ class RealWebDAVRepository(
                 else -> selectedFolders
             }
 
-            if (retryFailedOnly && scanFolders.isEmpty()) {
+            if (retryFailedOnly && plannedScanFolders.isEmpty()) {
                 Log.d(TAG, "No failed folders queued for retry, skipping sync")
                 return@withContext Result.success(0)
             }
+            val checkpointScope = buildSyncCheckpointScope(
+                retryFailedOnly = retryFailedOnly,
+                folders = plannedScanFolders
+            )
+            val savedCheckpointScope = PreferenceUtil.getWebDavSyncCheckpointScope(configId)
+            if (savedCheckpointScope != checkpointScope) {
+                PreferenceUtil.clearWebDavSyncCheckpoint(configId)
+                PreferenceUtil.setWebDavSyncCheckpointScope(configId, checkpointScope)
+            }
+            val restoredCheckpointFolders = if (savedCheckpointScope == checkpointScope) {
+                PreferenceUtil.getWebDavSyncCheckpointFolders(configId)
+                    .map(::normalizeFolderPath)
+                    .filter { it in plannedScanFolders.toSet() }
+                    .toMutableSet()
+            } else {
+                mutableSetOf()
+            }
+            val plannedFolderSet = plannedScanFolders.toSet()
+            restoredCheckpointFolders.removeAll { it !in plannedFolderSet }
+            if (restoredCheckpointFolders.isNotEmpty()) {
+                PreferenceUtil.setWebDavSyncCheckpointFolders(configId, restoredCheckpointFolders)
+                Log.d(
+                    TAG,
+                    "Resuming sync checkpoint: completed=${restoredCheckpointFolders.size}/${plannedScanFolders.size}"
+                )
+            }
+            val scanFolders = plannedScanFolders.filterNot { it in restoredCheckpointFolders }
 
             val successfulFolders = mutableSetOf<String>()
             val failedFolders = mutableSetOf<String>()
@@ -369,6 +399,12 @@ class RealWebDAVRepository(
                                 if (folderResult.skipped) {
                                     totalQuickSkippedFolders += 1
                                     completedFolders += 1
+                                    restoredCheckpointFolders += folder
+                                    persistSyncCheckpointProgress(
+                                        configId = configId,
+                                        scope = checkpointScope,
+                                        completedFolders = restoredCheckpointFolders
+                                    )
                                     onProgress?.invoke(
                                         WebDAVSyncProgress(
                                             completedFolders = completedFolders,
@@ -449,6 +485,12 @@ class RealWebDAVRepository(
 
                                 if (pendingUpserts.isEmpty()) {
                                     completedFolders += 1
+                                    restoredCheckpointFolders += folder
+                                    persistSyncCheckpointProgress(
+                                        configId = configId,
+                                        scope = checkpointScope,
+                                        completedFolders = restoredCheckpointFolders
+                                    )
                                     onProgress?.invoke(
                                         WebDAVSyncProgress(
                                             completedFolders = completedFolders,
@@ -500,6 +542,12 @@ class RealWebDAVRepository(
                                 }
                                 totalSyncedSongs += songEntities.size
                                 completedFolders += 1
+                                restoredCheckpointFolders += folder
+                                persistSyncCheckpointProgress(
+                                    configId = configId,
+                                    scope = checkpointScope,
+                                    completedFolders = restoredCheckpointFolders
+                                )
                                 onProgress?.invoke(
                                     WebDAVSyncProgress(
                                         completedFolders = completedFolders,
@@ -573,6 +621,7 @@ class RealWebDAVRepository(
                 successfulFolders = successfulFolders,
                 failedFolders = failedFolders
             )
+            PreferenceUtil.clearWebDavSyncCheckpoint(configId)
 
             val totalCount = webDAVDao.getSongCount(configId)
             if (failedFolders.isNotEmpty()) {
@@ -759,6 +808,33 @@ class RealWebDAVRepository(
         } else {
             PreferenceUtil.setWebDavFailedFolders(configId, nextQueue)
         }
+    }
+
+    private fun buildSyncCheckpointScope(
+        retryFailedOnly: Boolean,
+        folders: List<String>
+    ): String {
+        val normalized = folders.map(::normalizeFolderPath).sorted()
+        val payload = buildString {
+            append(if (retryFailedOnly) "retry" else "full")
+            normalized.forEach { folder ->
+                append('|')
+                append(folder)
+            }
+        }
+        return payload.sha256Hex()
+    }
+
+    private fun persistSyncCheckpointProgress(
+        configId: Long,
+        scope: String,
+        completedFolders: Set<String>
+    ) {
+        PreferenceUtil.setWebDavSyncCheckpointScope(configId, scope)
+        PreferenceUtil.setWebDavSyncCheckpointFolders(
+            configId,
+            completedFolders.map(::normalizeFolderPath).toSet()
+        )
     }
 
     // Extension functions for mapping
