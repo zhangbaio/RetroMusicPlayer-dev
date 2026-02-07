@@ -189,15 +189,18 @@ class PlaylistDetailsFragment : AbsMainActivityFragment(R.layout.fragment_playli
 
     private fun checkIsEmpty() {
         if (_binding != null) {
-            if (playlistSongAdapter.itemCount != 0) {
-                binding.empty.isVisible = false
+            val hasVisibleSongs = playlistSongAdapter.itemCount != 0
+            binding.empty.isVisible = !hasVisibleSongs
+            if (hasVisibleSongs) return
+
+            if (playlistSongAdapter.hasSongs()) {
+                binding.emptyIcon.setImageResource(R.drawable.ic_search)
+                binding.emptyText.text = getString(R.string.no_search_results)
+                binding.emptySubtitle.text = getString(R.string.empty_state_description_search_results)
             } else {
-                binding.empty.isVisible = true
-                if (playlistSongAdapter.hasSongs()) {
-                    binding.emptyText.text = getString(R.string.no_search_results)
-                } else {
-                    binding.emptyText.text = getString(R.string.no_songs)
-                }
+                binding.emptyIcon.setImageResource(R.drawable.ic_playlist_play)
+                binding.emptyText.text = getString(R.string.no_songs)
+                binding.emptySubtitle.text = getString(R.string.empty_state_description_playlist_songs)
             }
         }
     }

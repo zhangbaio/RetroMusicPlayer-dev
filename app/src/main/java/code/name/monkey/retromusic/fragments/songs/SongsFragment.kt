@@ -50,6 +50,16 @@ class SongsFragment : AbsRecyclerViewCustomGridSizeFragment<SongAdapter, GridLay
     override val emptyMessage: Int
         get() = if (sourceFilter == SourceType.WEBDAV) R.string.no_webdav_songs else R.string.no_songs
 
+    override val emptyDescriptionMessage: Int
+        get() = if (sourceFilter == SourceType.WEBDAV) {
+            R.string.empty_state_description_webdav
+        } else {
+            R.string.empty_state_description_local_songs
+        }
+
+    override val emptyIcon: Int
+        get() = if (sourceFilter == SourceType.WEBDAV) R.drawable.ic_cloud else R.drawable.ic_music_note_off
+
     override val isShuffleVisible: Boolean
         get() = true
 

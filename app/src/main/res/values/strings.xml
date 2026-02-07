@@ -280,6 +280,12 @@
     <string name="no_results">No results</string>
     <string name="no_songs">You have no songs</string>
     <string name="no_search_results">No search results</string>
+    <string name="empty_state_description_generic">Try scanning your library or syncing a source.</string>
+    <string name="empty_state_description_local_songs">Add local music files, then scan to import them.</string>
+    <string name="empty_state_description_webdav">Sync your selected WebDAV folders to load songs.</string>
+    <string name="empty_state_description_playlists">Create a playlist or import one to get started.</string>
+    <string name="empty_state_description_playlist_songs">Add songs to this playlist to get started.</string>
+    <string name="empty_state_description_search_results">Try a different keyword.</string>
     <string name="normal">Normal</string>
     <string name="normal_lyrics">Normal lyrics</string>
     <string name="not_listed_in_media_store"><![CDATA[<b>%s</b> is not listed in the media store.]]></string>

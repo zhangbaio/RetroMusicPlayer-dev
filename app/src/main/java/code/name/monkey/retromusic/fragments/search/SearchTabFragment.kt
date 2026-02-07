@@ -64,7 +64,7 @@ class SearchTabFragment : AbsMainActivityFragment(R.layout.fragment_search_tab),
     private fun observePlaylists() {
         libraryViewModel.getPlaylists().observe(viewLifecycleOwner) { playlists ->
             playlistGridAdapter?.submitPlaylists(playlists)
-            binding.emptyText.isVisible = playlists.isEmpty()
+            binding.emptyState.isVisible = playlists.isEmpty()
             binding.songsRecycler.isVisible = playlists.isNotEmpty()
         }
     }

@@ -16,6 +16,7 @@ package code.name.monkey.retromusic.fragments.base
 
 import android.os.Bundle
 import android.view.*
+import androidx.annotation.DrawableRes
 import androidx.annotation.NonNull
 import androidx.annotation.StringRes
 import androidx.appcompat.widget.Toolbar
@@ -138,12 +139,22 @@ abstract class AbsRecyclerViewFragment<A : RecyclerView.Adapter<*>, LM : Recycle
     protected open val emptyMessage: Int
         @StringRes get() = R.string.empty
 
-    private fun getEmojiByUnicode(unicode: Int): String {
-        return String(Character.toChars(unicode))
-    }
+    protected open val emptyDescriptionMessage: Int?
+        @StringRes get() = R.string.empty_state_description_generic
+
+    protected open val emptyIcon: Int
+        @DrawableRes get() = R.drawable.ic_music_note_off
 
     private fun checkIsEmpty() {
         binding.emptyText.setText(emptyMessage)
+        binding.emptyIcon.setImageResource(emptyIcon)
+        val emptyDescription = emptyDescriptionMessage
+        if (emptyDescription != null) {
+            binding.emptySubtitle.isVisible = true
+            binding.emptySubtitle.setText(emptyDescription)
+        } else {
+            binding.emptySubtitle.isVisible = false
+        }
         binding.empty.isVisible = adapter!!.itemCount == 0
     }
 
