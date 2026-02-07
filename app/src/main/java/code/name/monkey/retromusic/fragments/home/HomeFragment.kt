@@ -38,7 +38,7 @@ import code.name.monkey.retromusic.dialogs.ImportPlaylistDialog
 import code.name.monkey.retromusic.extensions.accentColor
 import code.name.monkey.retromusic.extensions.dip
 import code.name.monkey.retromusic.extensions.elevatedAccentColor
-import code.name.monkey.retromusic.extensions.setUpMediaRouteButton
+
 import code.name.monkey.retromusic.fragments.ReloadType
 import code.name.monkey.retromusic.fragments.base.AbsMainActivityFragment
 import code.name.monkey.retromusic.glide.RetroGlideExtension
@@ -209,8 +209,6 @@ class HomeFragment :
             menu,
             ATHToolbarActivity.getToolbarBackgroundColor(binding.toolbar)
         )
-        //Setting up cast button
-        requireContext().setUpMediaRouteButton(menu)
     }
 
     override fun scrollToTop() {

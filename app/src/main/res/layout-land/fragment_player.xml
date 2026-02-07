@@ -146,6 +146,12 @@
         android:layout_height="1dp"
         android:visibility="gone" />
 
+    <androidx.mediarouter.app.MediaRouteButton
+        android:id="@+id/actionCast"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/queueContainer"
         android:layout_width="1dp"

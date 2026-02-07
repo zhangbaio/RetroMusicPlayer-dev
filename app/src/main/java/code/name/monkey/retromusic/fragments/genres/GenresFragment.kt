@@ -26,7 +26,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import code.name.monkey.retromusic.EXTRA_GENRE
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.adapter.GenreAdapter
-import code.name.monkey.retromusic.extensions.setUpMediaRouteButton
+
 import code.name.monkey.retromusic.fragments.ReloadType
 import code.name.monkey.retromusic.fragments.base.AbsRecyclerViewFragment
 import code.name.monkey.retromusic.interfaces.IGenreClickListener
@@ -66,8 +66,6 @@ GenresFragment : AbsRecyclerViewFragment<GenreAdapter, LinearLayoutManager>(),
         menu.removeItem(R.id.action_layout_type)
         menu.removeItem(R.id.action_sort_order)
         menu.findItem(R.id.action_settings).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-        //Setting up cast button
-        requireContext().setUpMediaRouteButton(menu)
     }
 
     override fun onResume() {

@@ -291,7 +291,7 @@
             android:background="@android:color/transparent"
             android:scaleType="center"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/spacer"
+            app:layout_constraintEnd_toStartOf="@+id/actionCast"
             app:layout_constraintHorizontal_chainStyle="spread"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
@@ -299,10 +299,10 @@
             app:tint="?attr/colorControlNormal"
             tools:ignore="ContentDescription" />
 
-        <View
-            android:id="@+id/spacer"
+        <androidx.mediarouter.app.MediaRouteButton
+            android:id="@+id/actionCast"
             android:layout_width="80dp"
-            android:layout_height="1dp"
+            android:layout_height="48dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/actionQueue"
             app:layout_constraintStart_toEndOf="@+id/actionLyrics"
@@ -316,7 +316,7 @@
             android:scaleType="center"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@+id/spacer"
+            app:layout_constraintStart_toEndOf="@+id/actionCast"
             app:layout_constraintTop_toTopOf="parent"
             app:srcCompat="@drawable/ic_queue_music"
             app:tint="?attr/colorControlNormal"

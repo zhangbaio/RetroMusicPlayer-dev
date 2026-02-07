@@ -36,6 +36,7 @@ import code.name.monkey.retromusic.SNOWFALL
 import code.name.monkey.retromusic.adapter.song.PlayingQueueAdapter
 import code.name.monkey.retromusic.databinding.FragmentPlayerBinding
 import code.name.monkey.retromusic.extensions.*
+import code.name.monkey.retromusic.extensions.setUpCastButton
 import code.name.monkey.retromusic.fragments.base.AbsPlayerFragment
 import code.name.monkey.retromusic.fragments.player.PlayerAlbumCoverFragment
 import code.name.monkey.retromusic.glide.RetroGlideExtension
@@ -427,6 +428,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         binding.actionLyrics?.setOnClickListener {
             toggleLyrics()
         }
+        binding.actionCast?.setUpCastButton(requireContext())
         binding.actionQueue?.setOnClickListener {
             toggleQueueMode()
         }

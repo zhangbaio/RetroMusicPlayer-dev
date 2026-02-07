@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.view.Menu
 import androidx.fragment.app.FragmentActivity
+import androidx.mediarouter.app.MediaRouteButton
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.activities.PurchaseActivity
 import com.google.android.gms.cast.framework.CastButtonFactory
@@ -17,6 +18,10 @@ import java.util.*
 
 fun Context.setUpMediaRouteButton(menu: Menu) {
     CastButtonFactory.setUpMediaRouteButton(this, menu, R.id.action_cast)
+}
+
+fun MediaRouteButton.setUpCastButton(context: Context) {
+    CastButtonFactory.setUpMediaRouteButton(context, this)
 }
 
 fun FragmentActivity.installLanguageAndRecreate(code: String, onInstallComplete: () -> Unit) {
