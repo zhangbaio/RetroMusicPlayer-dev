@@ -39,6 +39,22 @@ open class Song(
     open val webDavAlbumArtPath: String? = null
 ) : Parcelable {
 
+    val displayArtistName: String
+        get() {
+            val normalized = artistName.trim()
+            if (normalized.isEmpty()) {
+                return ""
+            }
+            if (normalized == Artist.UNKNOWN_ARTIST_DISPLAY_NAME) {
+                return ""
+            }
+            val lower = normalized.lowercase()
+            if (lower == "unknown" || lower == "<unknown>") {
+                return ""
+            }
+            return artistName
+        }
+
 
     // need to override manually because is open and cannot be a data class
     override fun equals(other: Any?): Boolean {

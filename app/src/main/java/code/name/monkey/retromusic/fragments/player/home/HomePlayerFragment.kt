@@ -81,7 +81,7 @@ class HomePlayerFragment : AbsPlayerFragment(R.layout.fragment_home_player),
     private fun updateSong() {
         val song = MusicPlayerRemote.currentSong
         binding.title.text = song.title
-        binding.text.text = song.artistName
+        binding.text.text = song.displayArtistName
     }
 
     override fun toolbarIconColor(): Int {

@@ -20,36 +20,44 @@ import androidx.annotation.LayoutRes
 import androidx.recyclerview.widget.GridLayoutManager
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.adapter.song.SongAdapter
-
 import code.name.monkey.retromusic.fragments.GridStyle
 import code.name.monkey.retromusic.fragments.ReloadType
 import code.name.monkey.retromusic.fragments.base.AbsRecyclerViewCustomGridSizeFragment
+import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.helper.SortOrder.SongSortOrder
+import code.name.monkey.retromusic.model.Song
+import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.RetroUtil
+import java.text.Collator
 
 class SongsFragment : AbsRecyclerViewCustomGridSizeFragment<SongAdapter, GridLayoutManager>() {
+
+    private val sourceFilter: SourceType by lazy {
+        resolveSourceFilter(arguments?.getString(ARG_SONG_SOURCE_FILTER))
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        libraryViewModel.getSongs().observe(viewLifecycleOwner) {
-            if (it.isNotEmpty())
-                adapter?.swapDataSet(it)
-            else
-                adapter?.swapDataSet(listOf())
+        libraryViewModel.getSongs().observe(viewLifecycleOwner) { songs ->
+            adapter?.swapDataSet(filterSongs(songs))
         }
     }
 
     override val titleRes: Int
-        get() = R.string.songs
+        get() = if (sourceFilter == SourceType.WEBDAV) R.string.web else R.string.songs
 
     override val emptyMessage: Int
-        get() = R.string.no_songs
+        get() = if (sourceFilter == SourceType.WEBDAV) R.string.no_webdav_songs else R.string.no_songs
 
     override val isShuffleVisible: Boolean
         get() = true
 
     override fun onShuffleClicked() {
-        libraryViewModel.shuffleSongs()
+        val currentSongs = adapter?.dataSet.orEmpty()
+        if (currentSongs.isNotEmpty()) {
+            MusicPlayerRemote.openAndShuffleQueue(currentSongs, true)
+        }
     }
 
     override fun createLayoutManager(): GridLayoutManager {
@@ -326,13 +334,64 @@ class SongsFragment : AbsRecyclerViewCustomGridSizeFragment<SongAdapter, GridLay
         adapter?.actionMode?.finish()
     }
 
+    private fun resolveSourceFilter(filter: String?): SourceType {
+        return if (filter.equals(SourceType.WEBDAV.name, ignoreCase = true)) {
+            SourceType.WEBDAV
+        } else {
+            SourceType.LOCAL
+        }
+    }
+
+    private fun filterSongs(songs: List<Song>): List<Song> {
+        val filtered = songs.filter { it.sourceType == sourceFilter }
+        if (sourceFilter != SourceType.WEBDAV) {
+            return filtered
+        }
+        return sortSongs(filtered)
+    }
+
+    private fun sortSongs(songs: List<Song>): List<Song> {
+        val collator = Collator.getInstance()
+        return when (PreferenceUtil.songSortOrder) {
+            SongSortOrder.SONG_A_Z -> songs.sortedWith { s1, s2 ->
+                collator.compare(s1.title, s2.title)
+            }
+            SongSortOrder.SONG_Z_A -> songs.sortedWith { s1, s2 ->
+                collator.compare(s2.title, s1.title)
+            }
+            SongSortOrder.SONG_ALBUM -> songs.sortedWith { s1, s2 ->
+                collator.compare(s1.albumName, s2.albumName)
+            }
+            SongSortOrder.SONG_ALBUM_ARTIST -> songs.sortedWith { s1, s2 ->
+                collator.compare(s1.albumArtist.orEmpty(), s2.albumArtist.orEmpty())
+            }
+            SongSortOrder.SONG_ARTIST -> songs.sortedWith { s1, s2 ->
+                collator.compare(s1.artistName, s2.artistName)
+            }
+            SongSortOrder.COMPOSER -> songs.sortedWith { s1, s2 ->
+                collator.compare(s1.composer.orEmpty(), s2.composer.orEmpty())
+            }
+            SongSortOrder.SONG_YEAR -> songs.sortedByDescending { it.year }
+            SongSortOrder.SONG_DATE, SongSortOrder.SONG_DATE_MODIFIED -> songs.sortedByDescending {
+                it.dateModified
+            }
+            else -> songs
+        }
+    }
+
     companion object {
+        private const val ARG_SONG_SOURCE_FILTER = "song_source_filter"
+
         @JvmField
         var TAG: String = SongsFragment::class.java.simpleName
 
         @JvmStatic
-        fun newInstance(): SongsFragment {
-            return SongsFragment()
+        fun newInstance(sourceType: SourceType = SourceType.LOCAL): SongsFragment {
+            return SongsFragment().apply {
+                arguments = Bundle().apply {
+                    putString(ARG_SONG_SOURCE_FILTER, sourceType.name)
+                }
+            }
         }
     }
 }

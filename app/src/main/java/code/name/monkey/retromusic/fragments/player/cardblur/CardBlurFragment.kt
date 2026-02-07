@@ -132,7 +132,7 @@ class CardBlurFragment : AbsPlayerFragment(R.layout.fragment_card_blur_player),
         val song = MusicPlayerRemote.currentSong
         binding.run {
             title.text = song.title
-            text.text = song.artistName
+            text.text = song.displayArtistName
         }
     }
 

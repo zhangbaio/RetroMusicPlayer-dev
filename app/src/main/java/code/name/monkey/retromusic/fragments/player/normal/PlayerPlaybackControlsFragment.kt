@@ -107,7 +107,7 @@ class PlayerPlaybackControlsFragment :
     fun updateSongInfo() {
         val song = MusicPlayerRemote.currentSong
         binding.title.text = song.title
-        binding.text.text = song.artistName
+        binding.text.text = song.displayArtistName
     }
 
     fun setSongInfoVisible(visible: Boolean) {

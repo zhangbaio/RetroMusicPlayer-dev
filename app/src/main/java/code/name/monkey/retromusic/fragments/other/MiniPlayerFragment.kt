@@ -92,17 +92,20 @@ open class MiniPlayerFragment : AbsMusicServiceFragment(R.layout.fragment_mini_p
     private fun updateSongTitle() {
 
         val song = MusicPlayerRemote.currentSong
-        android.util.Log.d("MiniPlayerFragment", "updateSongTitle: song.id=${song.id}, title='${song.title}', artist='${song.artistName}', sourceType=${song.sourceType}")
+        android.util.Log.d("MiniPlayerFragment", "updateSongTitle: song.id=${song.id}, title='${song.title}', artist='${song.displayArtistName}', sourceType=${song.sourceType}")
 
         val builder = SpannableStringBuilder()
 
         val title = song.title.toSpannable()
         title.setSpan(ForegroundColorSpan(textColorPrimary()), 0, title.length, 0)
 
-        val text = song.artistName.toSpannable()
+        val text = song.displayArtistName.toSpannable()
         text.setSpan(ForegroundColorSpan(textColorSecondary()), 0, text.length, 0)
 
-        builder.append(title).append(" • ").append(text)
+        builder.append(title)
+        if (text.isNotEmpty()) {
+            builder.append(" • ").append(text)
+        }
 
         binding.miniPlayerTitle.isSelected = true
         binding.miniPlayerTitle.text = builder
@@ -111,7 +114,7 @@ open class MiniPlayerFragment : AbsMusicServiceFragment(R.layout.fragment_mini_p
 //        binding.title.isSelected = true
 //        binding.title.text = song.title
 //        binding.text.isSelected = true
-//        binding.text.text = song.artistName
+//        binding.text.text = song.displayArtistName
     }
 
     private fun updateSongCover() {

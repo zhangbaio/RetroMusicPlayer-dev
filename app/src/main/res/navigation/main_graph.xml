@@ -98,7 +98,22 @@
     <fragment
         android:id="@+id/action_song"
         android:name="code.name.monkey.retromusic.fragments.songs.SongsFragment"
-        tools:layout="@layout/fragment_main_recycler" />
+        tools:layout="@layout/fragment_main_recycler">
+        <argument
+            android:name="song_source_filter"
+            android:defaultValue="LOCAL"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/action_web"
+        android:name="code.name.monkey.retromusic.fragments.songs.SongsFragment"
+        tools:layout="@layout/fragment_main_recycler">
+        <argument
+            android:name="song_source_filter"
+            android:defaultValue="WEBDAV"
+            app:argType="string" />
+    </fragment>
 
     <fragment
         android:id="@+id/action_database"

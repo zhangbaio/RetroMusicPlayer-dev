@@ -32,6 +32,7 @@ data class CategoryInfo(
     ) {
         Home(R.id.action_home, R.string.for_you, R.drawable.asld_face),
         Songs(R.id.action_song, R.string.songs, R.drawable.asld_music_note),
+        Web(R.id.action_web, R.string.web, R.drawable.ic_cloud),
         Database(R.id.action_database, R.string.database, R.drawable.ic_library_music),
         Albums(R.id.action_album, R.string.albums, R.drawable.asld_album),
         Artists(R.id.action_artist, R.string.artists, R.drawable.asld_artist),

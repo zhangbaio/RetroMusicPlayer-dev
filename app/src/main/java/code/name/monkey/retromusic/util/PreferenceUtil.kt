@@ -142,6 +142,7 @@ object PreferenceUtil {
     val defaultCategories = listOf(
         CategoryInfo(CategoryInfo.Category.Home, true),
         CategoryInfo(CategoryInfo.Category.Songs, true),
+        CategoryInfo(CategoryInfo.Category.Web, true),
         CategoryInfo(CategoryInfo.Category.Database, true),
         CategoryInfo(CategoryInfo.Category.Albums, false),
         CategoryInfo(CategoryInfo.Category.Artists, false),
@@ -162,6 +163,7 @@ object PreferenceUtil {
         return when (category) {
             CategoryInfo.Category.Home -> CategoryInfo(category, true)
             CategoryInfo.Category.Songs -> CategoryInfo(category, true)
+            CategoryInfo.Category.Web -> CategoryInfo(category, true)
             CategoryInfo.Category.Database -> CategoryInfo(category, true)
             CategoryInfo.Category.Search -> CategoryInfo(category, true)
             else -> CategoryInfo(category, false)
@@ -170,6 +172,7 @@ object PreferenceUtil {
 
     private fun normalizeCategories(categories: List<CategoryInfo>): List<CategoryInfo> {
         val needsDatabaseMigration = categories.none { it.category == CategoryInfo.Category.Database }
+        val needsWebMigration = categories.none { it.category == CategoryInfo.Category.Web }
         val visibilityMap = mutableMapOf<CategoryInfo.Category, Boolean>()
         categories.forEach { visibilityMap[it.category] = it.visible }
         if (needsDatabaseMigration) {
@@ -178,9 +181,14 @@ object PreferenceUtil {
             visibilityMap[CategoryInfo.Category.Artists] = false
             visibilityMap[CategoryInfo.Category.Playlists] = false
         }
+        if (needsWebMigration) {
+            val visibleCount = visibilityMap.values.count { it }
+            visibilityMap[CategoryInfo.Category.Web] = visibleCount < 5
+        }
         val orderedCategories = listOf(
             CategoryInfo.Category.Home,
             CategoryInfo.Category.Songs,
+            CategoryInfo.Category.Web,
             CategoryInfo.Category.Database,
             CategoryInfo.Category.Albums,
             CategoryInfo.Category.Artists,

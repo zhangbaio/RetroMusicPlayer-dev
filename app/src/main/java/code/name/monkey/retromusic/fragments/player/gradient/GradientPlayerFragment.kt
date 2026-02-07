@@ -366,7 +366,7 @@ class GradientPlayerFragment : AbsPlayerFragment(R.layout.fragment_gradient_play
     private fun updateSong() {
         val song = MusicPlayerRemote.currentSong
         binding.playbackControlsFragment.title.text = song.title
-        binding.playbackControlsFragment.text.text = song.artistName
+        binding.playbackControlsFragment.text.text = song.displayArtistName
         updateLabel()
         if (PreferenceUtil.isSongInfo) {
             binding.playbackControlsFragment.songInfo.text = getSongInfo(song)

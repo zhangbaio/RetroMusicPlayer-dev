@@ -75,7 +75,7 @@ class LockScreenControlsFragment :
     private fun updateSong() {
         val song = MusicPlayerRemote.currentSong
         binding.title.text = song.title
-        binding.text.text = String.format("%s - %s", song.artistName, song.albumName)
+        binding.text.text = String.format("%s - %s", song.displayArtistName, song.albumName)
     }
 
     override fun onServiceConnected() {
