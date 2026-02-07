@@ -65,7 +65,12 @@ class DatabaseFragment : AbsMainActivityFragment(R.layout.fragment_database), IA
             findNavController().navigate(R.id.action_album, null, navOptions)
         }
         binding.entrySongs.setOnClickListener {
-            findNavController().navigate(R.id.action_song, null, navOptions)
+            val songsTabItem = mainActivity.navigationView.menu.findItem(R.id.action_song)
+            if (songsTabItem != null && songsTabItem.isVisible) {
+                mainActivity.navigationView.selectedItemId = R.id.action_song
+            } else {
+                findNavController().navigate(R.id.action_song, null, navOptions)
+            }
         }
     }
 

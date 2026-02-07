@@ -18,6 +18,7 @@ import android.util.Log
 import code.name.monkey.retromusic.db.WebDAVConfigEntity
 import code.name.monkey.retromusic.db.WebDAVSongEntity
 import code.name.monkey.retromusic.db.WebDAVDao
+import code.name.monkey.retromusic.model.Artist
 import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.model.WebDAVConfig
@@ -25,6 +26,7 @@ import code.name.monkey.retromusic.webdav.SardineWebDAVClient
 import code.name.monkey.retromusic.webdav.WebDAVClient
 import code.name.monkey.retromusic.webdav.WebDAVCryptoUtil
 import code.name.monkey.retromusic.webdav.WebDAVFile
+import code.name.monkey.retromusic.webdav.WebDAVMetadataParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -192,6 +194,7 @@ class RealWebDAVRepository(
             val scannedFiles = scannedFilesByPath.values.toList()
             Log.d(TAG, "Total found ${scannedFiles.size} audio files")
             val folderCoverMap = findFolderCoverMap(sardineClient, decryptedConfig, scannedFiles)
+            val metadataParser = WebDAVMetadataParser(scannedFiles)
             val existingByPath = existingSongs.associateBy { it.remotePath }
             val remotePaths = scannedFilesByPath.keys.toSet()
 
@@ -209,12 +212,13 @@ class RealWebDAVRepository(
             val songEntities = scannedFiles.mapIndexed { index, file ->
                 val existingSong = existingByPath[file.path]
                 val parentPath = parentFolderPath(file.path)
+                val parsedMetadata = metadataParser.parse(file)
                 WebDAVSongEntity(
                     id = existingSong?.id ?: 0L,
                     configId = configId,
                     remotePath = file.path,
-                    title = extractTitle(file.name),
-                    artistName = existingSong?.artistName ?: "Unknown Artist",
+                    title = resolveTitle(existingSong?.title, parsedMetadata.title),
+                    artistName = resolveArtistName(existingSong?.artistName, parsedMetadata.artistName),
                     albumName = existingSong?.albumName ?: "Unknown Album",
                     duration = existingSong?.duration ?: 0,
                     albumArtPath = folderCoverMap[parentPath] ?: existingSong?.albumArtPath,
@@ -307,6 +311,24 @@ class RealWebDAVRepository(
         } else {
             null
         }
+        val normalizedArtist = artistName.ifBlank { "Unknown Artist" }
+        val normalizedAlbum = albumName.ifBlank { "Unknown Album" }
+        val synthesizedArtistId = synthesizeEntityId(
+            "artist",
+            configId,
+            normalizedArtist
+        )
+        // When album metadata is missing, use parent folder to avoid collapsing all songs into one album.
+        val albumIdentity = if (normalizedAlbum.equals("Unknown Album", ignoreCase = true)) {
+            "${normalizedAlbum}|${parentFolderPath(remotePath)}|$normalizedArtist"
+        } else {
+            "${normalizedAlbum}|$normalizedArtist"
+        }
+        val synthesizedAlbumId = synthesizeEntityId(
+            "album",
+            configId,
+            albumIdentity
+        )
 
         return Song(
             id = id,
@@ -316,9 +338,9 @@ class RealWebDAVRepository(
             duration = duration,
             data = fullUrl, // For WebDAV songs, data contains the full URL
             dateModified = 0,
-            albumId = configId, // Use configId as albumId for grouping
+            albumId = synthesizedAlbumId,
             albumName = albumName,
-            artistId = configId, // Use configId as artistId for grouping
+            artistId = synthesizedArtistId,
             artistName = artistName,
             composer = null,
             albumArtist = null,
@@ -327,6 +349,14 @@ class RealWebDAVRepository(
             webDavConfigId = configId,
             webDavAlbumArtPath = fullAlbumArtUrl
         )
+    }
+
+    private fun synthesizeEntityId(kind: String, configId: Long, identity: String): Long {
+        // Build deterministic negative IDs to avoid collision with MediaStore positive IDs.
+        val key = "webdav|$kind|$configId|${identity.trim().lowercase()}"
+        val hash = key.hashCode().toLong()
+        val positive = if (hash == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(hash)
+        return -positive.coerceAtLeast(1L)
     }
 
     private fun buildFullUrl(serverUrl: String, path: String): String {
@@ -340,12 +370,28 @@ class RealWebDAVRepository(
         }
     }
 
-    private fun extractTitle(filename: String): String {
-        // Remove extension and clean up the filename
-        return filename.substringBeforeLast('.')
-            .replace("_", " ")
-            .replace(".", " ")
-            .trim()
+    private fun resolveTitle(existingTitle: String?, parsedTitle: String): String {
+        val parsed = parsedTitle.trim()
+        if (parsed.isNotEmpty()) {
+            return parsed
+        }
+        return existingTitle?.trim().orEmpty()
+    }
+
+    private fun resolveArtistName(existingArtist: String?, parsedArtist: String): String {
+        val parsed = parsedArtist.trim()
+        if (parsed.isNotEmpty()) {
+            return parsed
+        }
+        val existing = existingArtist?.trim().orEmpty()
+        return if (existing.isNotEmpty() && !isUnknownArtist(existing)) existing else ""
+    }
+
+    private fun isUnknownArtist(value: String): Boolean {
+        val normalized = value.trim().lowercase()
+        return normalized == Artist.UNKNOWN_ARTIST_DISPLAY_NAME.lowercase() ||
+            normalized == "unknown" ||
+            normalized == "<unknown>"
     }
 
     private suspend fun findFolderCoverMap(
