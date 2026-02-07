@@ -100,6 +100,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         private const val FULLSCREEN_DELAY = 3000L // 3 seconds
         private const val MODE_SWITCH_OUT_DURATION = 140L
         private const val MODE_SWITCH_IN_DURATION = 220L
+        private const val QUEUE_PROGRESS_TOP_GAP_DP = 10f
 
         fun newInstance(): PlayerFragment {
             return PlayerFragment()
@@ -482,11 +483,17 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         transition.addListener(object : TransitionListenerAdapter() {
             override fun onTransitionEnd(transition: Transition) {
                 isModeTransitionRunning = false
+                if (isQueueMode) {
+                    updateQueueRecyclerBottomPadding()
+                }
                 transition.removeListener(this)
             }
 
             override fun onTransitionCancel(transition: Transition) {
                 isModeTransitionRunning = false
+                if (isQueueMode) {
+                    updateQueueRecyclerBottomPadding()
+                }
                 transition.removeListener(this)
             }
         })
@@ -781,7 +788,8 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
             val recyclerBottom = recyclerLocation[1] + recyclerView.height
             val progressTop = progressLocation[1]
-            val reservedBottom = (recyclerBottom - progressTop).coerceAtLeast(0)
+            val extraTopGap = (resources.displayMetrics.density * QUEUE_PROGRESS_TOP_GAP_DP).toInt()
+            val reservedBottom = (recyclerBottom - progressTop + extraTopGap).coerceAtLeast(0)
 
             if (recyclerView.paddingBottom != reservedBottom) {
                 recyclerView.setPadding(
@@ -791,7 +799,8 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
                     reservedBottom
                 )
             }
-            recyclerView.clipToPadding = false
+            // Keep queue rows above the progress slider area.
+            recyclerView.clipToPadding = true
         }
     }
 
