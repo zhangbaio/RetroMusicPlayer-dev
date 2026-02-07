@@ -25,6 +25,7 @@ import android.view.View
 import androidx.appcompat.widget.Toolbar
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
+import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.lifecycle.lifecycleScope
@@ -603,7 +604,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         }
         isQueueMode = true
 
-        applyModeVisibilityChanges(animated) {
+        applyModeVisibilityChanges(animated = false) {
             // 队列模式下让歌曲列表占据更多空间，不显示顶部歌曲信息区
             binding.songHeaderContainer?.isVisible = false
             // 隐藏专辑封面
@@ -616,12 +617,21 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
         // 设置 RecyclerView
         setupQueueRecyclerView()
+        binding.queueRecyclerView?.apply {
+            alpha = 0f
+            clipToPadding = true
+        }
         // 更新模式按钮状态
         updateQueueModeButtons()
         // 更新区块副标题
         updateQueueSectionSubtitle()
         // 让队列列表扩展到进度条上方，不改变进度条与播放控件位置
-        updateQueueRecyclerBottomPadding()
+        updateQueueRecyclerBottomPadding(immediate = true) {
+            binding.queueRecyclerView?.animate()
+                ?.alpha(1f)
+                ?.setDuration(MODE_SWITCH_IN_DURATION)
+                ?.start()
+        }
         // 更新队列图标
         updateQueueIcon()
 
@@ -632,7 +642,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     private fun exitQueueMode(animated: Boolean = true) {
         isQueueMode = false
 
-        applyModeVisibilityChanges(animated) {
+        applyModeVisibilityChanges(animated = false) {
             // 隐藏歌曲头部信息
             binding.songHeaderContainer?.isVisible = false
             // 显示专辑封面
@@ -774,12 +784,19 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         updateQueueRecyclerBottomPadding()
     }
 
-    private fun updateQueueRecyclerBottomPadding() {
+    private fun updateQueueRecyclerBottomPadding(
+        immediate: Boolean = false,
+        onApplied: (() -> Unit)? = null
+    ) {
         val recyclerView = binding.queueRecyclerView ?: return
-        recyclerView.post {
-            if (!isQueueMode || _binding == null) return@post
+
+        fun applyPadding() {
+            if (!isQueueMode || _binding == null) return
             val progressSlider = binding.playbackControlsFragment.findViewById<View>(R.id.progressSlider)
-                ?: return@post
+                ?: run {
+                    onApplied?.invoke()
+                    return
+                }
 
             val recyclerLocation = IntArray(2)
             val progressLocation = IntArray(2)
@@ -801,6 +818,18 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
             }
             // Keep queue rows above the progress slider area.
             recyclerView.clipToPadding = true
+            onApplied?.invoke()
+        }
+
+        if (immediate) {
+            val progressSlider = binding.playbackControlsFragment.findViewById<View>(R.id.progressSlider)
+            if (recyclerView.isLaidOut && progressSlider?.isLaidOut == true) {
+                applyPadding()
+            } else {
+                binding.playerContainer.doOnLayout { applyPadding() }
+            }
+        } else {
+            recyclerView.post { applyPadding() }
         }
     }
 
