@@ -16,6 +16,7 @@ package code.name.monkey.retromusic.dialogs
 
 import android.app.Dialog
 import android.os.Bundle
+import android.text.TextUtils
 import androidx.core.os.bundleOf
 import androidx.core.text.parseAsHtml
 import androidx.fragment.app.DialogFragment
@@ -32,16 +33,25 @@ class RemoveSongFromPlaylistDialog : DialogFragment() {
     private val libraryViewModel by activityViewModel<LibraryViewModel>()
 
     companion object {
-        fun create(song: SongEntity): RemoveSongFromPlaylistDialog {
+        private const val EXTRA_IS_FAVORITES_PLAYLIST = "extra_is_favorites_playlist"
+
+        fun create(
+            song: SongEntity,
+            isFavoritesPlaylist: Boolean = false
+        ): RemoveSongFromPlaylistDialog {
             val list = mutableListOf<SongEntity>()
             list.add(song)
-            return create(list)
+            return create(list, isFavoritesPlaylist)
         }
 
-        fun create(songs: List<SongEntity>): RemoveSongFromPlaylistDialog {
+        fun create(
+            songs: List<SongEntity>,
+            isFavoritesPlaylist: Boolean = false
+        ): RemoveSongFromPlaylistDialog {
             return RemoveSongFromPlaylistDialog().apply {
                 arguments = bundleOf(
-                    EXTRA_SONG to songs
+                    EXTRA_SONG to songs,
+                    EXTRA_IS_FAVORITES_PLAYLIST to isFavoritesPlaylist
                 )
             }
         }
@@ -49,20 +59,41 @@ class RemoveSongFromPlaylistDialog : DialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val songs = extraNotNull<List<SongEntity>>(EXTRA_SONG).value
-        val pair = if (songs.size > 1) {
-            Pair(
-                R.string.remove_songs_from_playlist_title,
-                String.format(getString(R.string.remove_x_songs_from_playlist), songs.size)
-                    .parseAsHtml()
-            )
+        val isFavoritesPlaylist = arguments?.getBoolean(EXTRA_IS_FAVORITES_PLAYLIST, false) ?: false
+        val pair = if (isFavoritesPlaylist) {
+            if (songs.size > 1) {
+                Pair(
+                    R.string.remove_songs_from_favorites_title,
+                    String.format(getString(R.string.remove_x_songs_from_favorites), songs.size)
+                        .parseAsHtml()
+                )
+            } else {
+                val safeSongTitle = TextUtils.htmlEncode(songs[0].title)
+                Pair(
+                    R.string.remove_song_from_favorites_title,
+                    String.format(
+                        getString(R.string.remove_song_x_from_favorites),
+                        safeSongTitle
+                    ).parseAsHtml()
+                )
+            }
         } else {
-            Pair(
-                R.string.remove_song_from_playlist_title,
-                String.format(
-                    getString(R.string.remove_song_x_from_playlist),
-                    songs[0].title
-                ).parseAsHtml()
-            )
+            if (songs.size > 1) {
+                Pair(
+                    R.string.remove_songs_from_playlist_title,
+                    String.format(getString(R.string.remove_x_songs_from_playlist), songs.size)
+                        .parseAsHtml()
+                )
+            } else {
+                val safeSongTitle = TextUtils.htmlEncode(songs[0].title)
+                Pair(
+                    R.string.remove_song_from_playlist_title,
+                    String.format(
+                        getString(R.string.remove_song_x_from_playlist),
+                        safeSongTitle
+                    ).parseAsHtml()
+                )
+            }
         }
         return materialDialog(pair.first)
             .setMessage(pair.second)

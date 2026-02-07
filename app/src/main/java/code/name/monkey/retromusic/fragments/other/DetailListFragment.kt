@@ -28,11 +28,12 @@ import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.lifecycle.lifecycleScope
 import code.name.monkey.retromusic.*
 import code.name.monkey.retromusic.adapter.album.AlbumAdapter
 import code.name.monkey.retromusic.adapter.artist.ArtistAdapter
+import code.name.monkey.retromusic.adapter.song.FavoriteSongAdapter
 import code.name.monkey.retromusic.adapter.song.ShuffleButtonSongAdapter
-import code.name.monkey.retromusic.adapter.song.SongAdapter
 import code.name.monkey.retromusic.databinding.FragmentPlaylistDetailBinding
 import code.name.monkey.retromusic.db.toSong
 import code.name.monkey.retromusic.fragments.base.AbsMainActivityFragment
@@ -44,6 +45,9 @@ import code.name.monkey.retromusic.util.RetroUtil
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.transition.MaterialSharedAxis
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 class DetailListFragment : AbsMainActivityFragment(R.layout.fragment_playlist_detail),
@@ -152,18 +156,24 @@ class DetailListFragment : AbsMainActivityFragment(R.layout.fragment_playlist_de
 
     private fun loadFavorite() {
         binding.toolbar.setTitle(R.string.favorites)
-        val songAdapter = SongAdapter(
-            requireActivity(),
-            mutableListOf(),
-            R.layout.item_list
-        )
-        binding.recyclerView.apply {
-            adapter = songAdapter
-            layoutManager = linearLayoutManager()
-        }
-        libraryViewModel.favorites().observe(viewLifecycleOwner) { songEntities ->
-            val songs = songEntities.map { songEntity -> songEntity.toSong() }
-            songAdapter.swapDataSet(songs)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val favoritePlaylistId = withContext(Dispatchers.IO) {
+                libraryViewModel.favoritePlaylist().playListId
+            }
+            val songAdapter = FavoriteSongAdapter(
+                playlistId = favoritePlaylistId,
+                activity = requireActivity(),
+                dataSet = mutableListOf(),
+                itemLayoutRes = R.layout.item_list
+            )
+            binding.recyclerView.apply {
+                adapter = songAdapter
+                layoutManager = linearLayoutManager()
+            }
+            libraryViewModel.favorites().observe(viewLifecycleOwner) { songEntities ->
+                val songs = songEntities.map { songEntity -> songEntity.toSong() }
+                songAdapter.swapDataSet(songs)
+            }
         }
     }
 

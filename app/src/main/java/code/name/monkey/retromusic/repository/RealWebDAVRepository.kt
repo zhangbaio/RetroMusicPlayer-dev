@@ -14,6 +14,8 @@
  */
 package code.name.monkey.retromusic.repository
 
+import android.media.MediaMetadataRetriever
+import android.util.Base64
 import android.util.Log
 import code.name.monkey.retromusic.db.WebDAVConfigEntity
 import code.name.monkey.retromusic.db.WebDAVSongEntity
@@ -41,6 +43,7 @@ class RealWebDAVRepository(
     companion object {
         private const val TAG = "RealWebDAVRepository"
         private const val DELETE_PATH_BATCH_SIZE = 300
+        private const val MAX_DURATION_PROBE_FILE_SIZE = 100L * 1024 * 1024 // 100MB
 
         private val COVER_FILE_NAMES = setOf(
             "cover.jpg", "album.jpg", "folder.jpg",
@@ -213,6 +216,11 @@ class RealWebDAVRepository(
                 val existingSong = existingByPath[file.path]
                 val parentPath = parentFolderPath(file.path)
                 val parsedMetadata = metadataParser.parse(file)
+                val duration = resolveDurationMillis(
+                    file = file,
+                    config = decryptedConfig,
+                    existingDuration = existingSong?.duration ?: 0L
+                )
                 WebDAVSongEntity(
                     id = existingSong?.id ?: 0L,
                     configId = configId,
@@ -220,7 +228,7 @@ class RealWebDAVRepository(
                     title = resolveTitle(existingSong?.title, parsedMetadata.title),
                     artistName = resolveArtistName(existingSong?.artistName, parsedMetadata.artistName),
                     albumName = existingSong?.albumName ?: "Unknown Album",
-                    duration = existingSong?.duration ?: 0,
+                    duration = duration,
                     albumArtPath = folderCoverMap[parentPath] ?: existingSong?.albumArtPath,
                     trackNumber = index + 1,
                     year = existingSong?.year ?: 0,
@@ -392,6 +400,39 @@ class RealWebDAVRepository(
         return normalized == Artist.UNKNOWN_ARTIST_DISPLAY_NAME.lowercase() ||
             normalized == "unknown" ||
             normalized == "<unknown>"
+    }
+
+    private fun resolveDurationMillis(
+        file: WebDAVFile,
+        config: WebDAVConfig,
+        existingDuration: Long
+    ): Long {
+        if (existingDuration > 0L) {
+            return existingDuration
+        }
+        if (file.size > MAX_DURATION_PROBE_FILE_SIZE) {
+            return 0L
+        }
+        val url = buildFullUrl(config.serverUrl, file.path)
+        val encodedCredentials = Base64.encodeToString(
+            "${config.username}:${config.password}".toByteArray(),
+            Base64.NO_WRAP
+        )
+        val headers = mapOf("Authorization" to "Basic $encodedCredentials")
+
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(url, headers)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?.coerceAtLeast(0L)
+                ?: 0L
+        } catch (error: Exception) {
+            Log.d(TAG, "Failed to probe duration for ${file.path}: ${error.message}")
+            0L
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     private suspend fun findFolderCoverMap(

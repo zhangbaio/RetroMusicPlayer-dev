@@ -19,7 +19,8 @@
             android:layout_height="wrap_content"
             android:background="@null"
             android:hint="@string/playlist_name_empty"
-            android:inputType="textPersonName|textCapWords|text"
+            android:imeOptions="actionDone"
+            android:inputType="text|textCapWords"
             android:padding="16dp"
             android:textAppearance="@style/TextViewNormal" />
     </com.google.android.material.textfield.TextInputLayout>

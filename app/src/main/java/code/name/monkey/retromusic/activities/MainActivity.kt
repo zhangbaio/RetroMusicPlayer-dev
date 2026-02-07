@@ -21,7 +21,6 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.contains
-import androidx.navigation.ui.NavigationUI
 import androidx.navigation.ui.setupWithNavController
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.activities.base.AbsCastActivity
@@ -118,30 +117,20 @@ class MainActivity : AbsCastActivity() {
         navController.graph = navGraph
         navigationView.setupWithNavController(navController)
         navigationView.setOnItemSelectedListener { item ->
-            if (item.itemId == R.id.action_database) {
-                navController.popBackStack(R.id.action_database, false)
-                if (navController.currentDestination?.id != R.id.action_database) {
-                    navController.navigate(R.id.action_database)
-                }
-                true
-            } else {
-                NavigationUI.onNavDestinationSelected(item, navController)
-            }
+            navigateToTabRoot(navController, item.itemId)
         }
         // Scroll Fragment to top
         navigationView.setOnItemReselectedListener { item ->
-            if (item.itemId == R.id.action_database) {
-                navController.popBackStack(R.id.action_database, false)
-                if (navController.currentDestination?.id != R.id.action_database) {
-                    navController.navigate(R.id.action_database)
-                }
-                return@setOnItemReselectedListener
-            }
             val currentDestinationId = navController.currentDestination?.id
             // When current destination is not bound to bottom navigation (e.g. artist opened from Database),
             // selected tab can be stale. In this case, tapping tab should navigate to the tab root.
             if (currentDestinationId != item.itemId) {
-                navController.navigate(item.itemId)
+                navigateToTabRoot(navController, item.itemId)
+                return@setOnItemReselectedListener
+            }
+            if (item.itemId == R.id.action_database) {
+                // Keep Database behavior consistent: always show its root page when tab is tapped.
+                navigateToTabRoot(navController, item.itemId)
                 return@setOnItemReselectedListener
             }
             currentFragment(R.id.fragment_container).apply {
@@ -171,6 +160,22 @@ class MainActivity : AbsCastActivity() {
                     animate = true
                 ) // Hide Bottom Navigation Bar
             }
+        }
+    }
+
+    private fun navigateToTabRoot(
+        navController: androidx.navigation.NavController,
+        tabId: Int
+    ): Boolean {
+        return runCatching {
+            navController.popBackStack(tabId, false)
+            if (navController.currentDestination?.id != tabId) {
+                navController.navigate(tabId)
+            }
+            true
+        }.getOrElse { error ->
+            Log.w(TAG, "navigateToTabRoot failed for tabId=$tabId", error)
+            false
         }
     }
 
