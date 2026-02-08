@@ -8,12 +8,25 @@
     android:orientation="vertical"
     tools:ignore="MissingPrefix">
 
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/progressStartGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_begin="16dp" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/progressEndGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_end="16dp" />
+
     <!-- Song info section -->
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
         android:layout_marginTop="32dp"
         android:ellipsize="marquee"
         android:focusable="true"
@@ -26,7 +39,7 @@
         android:textColor="?android:attr/textColorPrimary"
         android:textStyle="bold"
         app:layout_constraintEnd_toStartOf="@+id/songFavourite"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toStartOf="@id/progressStartGuide"
         app:layout_constraintTop_toTopOf="parent"
         tools:text="Song Title" />
 
@@ -34,7 +47,6 @@
         android:id="@+id/text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
         android:layout_marginTop="4dp"
         android:ellipsize="marquee"
         android:focusable="true"
@@ -47,7 +59,7 @@
         android:textAppearance="@style/TextViewBody1"
         android:textColor="?android:attr/textColorSecondary"
         app:layout_constraintEnd_toStartOf="@+id/songFavourite"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toStartOf="@id/progressStartGuide"
         app:layout_constraintTop_toBottomOf="@+id/title"
         tools:text="Artist Name" />
 
@@ -69,12 +81,11 @@
         android:id="@+id/songMenu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="4dp"
         android:background="?attr/roundSelector"
         android:padding="12dp"
         android:scaleType="fitCenter"
         app:layout_constraintBottom_toBottomOf="@+id/text"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toEndOf="@id/progressEndGuide"
         app:layout_constraintTop_toTopOf="@+id/title"
         app:srcCompat="@drawable/ic_more_vert"
         app:tint="?attr/colorControlNormal"
@@ -100,11 +111,10 @@
         android:id="@+id/songCurrentProgress"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
         android:minWidth="40dp"
         android:singleLine="true"
         android:textColor="?android:attr/textColorSecondary"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toStartOf="@id/progressStartGuide"
         app:layout_constraintTop_toBottomOf="@+id/progressSlider"
         tools:text="0:00" />
 
@@ -112,12 +122,11 @@
         android:id="@+id/songTotalTime"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="16dp"
         android:gravity="end"
         android:minWidth="40dp"
         android:singleLine="true"
         android:textColor="?android:attr/textColorSecondary"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toEndOf="@id/progressEndGuide"
         app:layout_constraintTop_toBottomOf="@+id/progressSlider"
         tools:text="-4:37" />
 

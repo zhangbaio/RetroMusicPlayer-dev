@@ -20,6 +20,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.ImageButton
 import android.widget.PopupMenu
 import android.widget.TextView
+import androidx.constraintlayout.widget.ConstraintLayout
 import code.name.monkey.appthemehelper.util.ATHUtil
 import code.name.monkey.appthemehelper.util.ColorUtil
 import code.name.monkey.appthemehelper.util.MaterialValueHelper
@@ -38,6 +39,9 @@ class PlayerPlaybackControlsFragment :
 
     private var _binding: FragmentPlayerPlaybackControlsBinding? = null
     private val binding get() = _binding!!
+    private val progressSliderLayoutChangeListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        alignToProgressTrack()
+    }
 
     private var isFavorite = false
 
@@ -68,6 +72,8 @@ class PlayerPlaybackControlsFragment :
 
         setUpPlayPauseFab()
         setUpSongInfo()
+        binding.progressSlider.addOnLayoutChangeListener(progressSliderLayoutChangeListener)
+        binding.root.post { alignToProgressTrack() }
     }
 
     private fun setUpSongInfo() {
@@ -221,7 +227,51 @@ class PlayerPlaybackControlsFragment :
         }
     }
 
+    private fun alignToProgressTrack() {
+        val binding = _binding ?: return
+        val slider = binding.progressSlider
+        val rootWidth = binding.root.width
+        if (rootWidth <= 0 || slider.width <= 0) return
+
+        val trackStart = slider.left + slider.trackSidePadding
+        val trackEnd = slider.right - slider.trackSidePadding
+        if (trackEnd <= trackStart) return
+
+        val constrainedStart = trackStart.coerceAtLeast(0)
+        val constrainedEnd = (rootWidth - trackEnd).coerceAtLeast(0)
+        val startChanged = updateGuideBegin(binding.progressStartGuide, constrainedStart)
+        val endChanged = updateGuideEnd(binding.progressEndGuide, constrainedEnd)
+        if (startChanged || endChanged) {
+            binding.root.requestLayout()
+        }
+    }
+
+    private fun updateGuideBegin(guideline: View, begin: Int): Boolean {
+        val params = guideline.layoutParams as ConstraintLayout.LayoutParams
+        if (params.guideBegin == begin && params.guideEnd == -1 && params.guidePercent == -1f) {
+            return false
+        }
+        params.guideBegin = begin
+        params.guideEnd = -1
+        params.guidePercent = -1f
+        guideline.layoutParams = params
+        return true
+    }
+
+    private fun updateGuideEnd(guideline: View, end: Int): Boolean {
+        val params = guideline.layoutParams as ConstraintLayout.LayoutParams
+        if (params.guideEnd == end && params.guideBegin == -1 && params.guidePercent == -1f) {
+            return false
+        }
+        params.guideEnd = end
+        params.guideBegin = -1
+        params.guidePercent = -1f
+        guideline.layoutParams = params
+        return true
+    }
+
     override fun onDestroyView() {
+        _binding?.progressSlider?.removeOnLayoutChangeListener(progressSliderLayoutChangeListener)
         super.onDestroyView()
         _binding = null
     }
