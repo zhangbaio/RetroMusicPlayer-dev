@@ -23,6 +23,7 @@ import java.net.URLDecoder
 object WebDAVSongDownloadUtil {
 
     private const val DOWNLOAD_SUB_DIRECTORY = "RetroMusic/WebDAV"
+    private const val MAX_REDIRECTS = 8
 
     suspend fun downloadSong(
         context: Context,
@@ -37,14 +38,12 @@ object WebDAVSongDownloadUtil {
             val plainPassword = resolvePlainPassword(config.password, config.id)
             val fileName = buildFileName(song, songUrl)
             val authHeader = buildAuthHeader(config.username, plainPassword)
-
-            val connection = (URL(songUrl).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15_000
-                readTimeout = 120_000
-                requestMethod = "GET"
-                setRequestProperty("Authorization", authHeader)
-                setRequestProperty("Accept", "*/*")
-            }
+            val authScopeUrl = runCatching { URL(config.serverUrl) }.getOrNull()
+            val (resolvedUrl, connection) = openDownloadConnection(
+                originalUrl = songUrl,
+                authHeader = authHeader,
+                authScope = authScopeUrl
+            )
 
             try {
                 val responseCode = connection.responseCode
@@ -56,7 +55,7 @@ object WebDAVSongDownloadUtil {
                     ?.substringBefore(';')
                     ?.trim()
                     .orEmpty()
-                    .ifBlank { guessMimeType(songUrl, fileName) }
+                    .ifBlank { guessMimeType(resolvedUrl, fileName) }
 
                 connection.inputStream.use { input ->
                     saveToLocal(context, input, fileName, mimeType)
@@ -65,6 +64,69 @@ object WebDAVSongDownloadUtil {
                 connection.disconnect()
             }
         }
+    }
+
+    private fun openDownloadConnection(
+        originalUrl: String,
+        authHeader: String,
+        authScope: URL?
+    ): Pair<String, HttpURLConnection> {
+        var currentUrl = originalUrl
+        var redirects = 0
+
+        while (true) {
+            val url = URL(currentUrl)
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 120_000
+                requestMethod = "GET"
+                instanceFollowRedirects = false
+                setRequestProperty("Accept", "*/*")
+                if (shouldAttachAuth(url, authScope)) {
+                    setRequestProperty("Authorization", authHeader)
+                }
+            }
+
+            val code = connection.responseCode
+            if (code in 200..299) {
+                return currentUrl to connection
+            }
+
+            if (code !in REDIRECT_CODES) {
+                return currentUrl to connection
+            }
+
+            val location = connection.getHeaderField("Location")
+            if (location.isNullOrBlank()) {
+                return currentUrl to connection
+            }
+
+            val nextUrl = URL(url, location).toString()
+            connection.inputStream?.closeQuietly()
+            connection.errorStream?.closeQuietly()
+            connection.disconnect()
+
+            redirects += 1
+            if (redirects > MAX_REDIRECTS) {
+                throw IllegalStateException("Too many redirects")
+            }
+            currentUrl = nextUrl
+        }
+    }
+
+    private fun shouldAttachAuth(requestUrl: URL, authScope: URL?): Boolean {
+        if (authScope == null) return true
+        return requestUrl.protocol.equals(authScope.protocol, ignoreCase = true) &&
+            requestUrl.host.equals(authScope.host, ignoreCase = true) &&
+            resolvePort(requestUrl) == resolvePort(authScope)
+    }
+
+    private fun resolvePort(url: URL): Int {
+        return if (url.port != -1) url.port else url.defaultPort
+    }
+
+    private fun InputStream.closeQuietly() {
+        runCatching { close() }
     }
 
     private fun resolveSongUrl(song: Song): String? {
@@ -129,6 +191,14 @@ object WebDAVSongDownloadUtil {
         val mimeFromExt = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
         return mimeFromExt ?: "audio/mpeg"
     }
+
+    private val REDIRECT_CODES = setOf(
+        HttpURLConnection.HTTP_MOVED_PERM,
+        HttpURLConnection.HTTP_MOVED_TEMP,
+        HttpURLConnection.HTTP_SEE_OTHER,
+        307,
+        308
+    )
 
     private fun saveToLocal(
         context: Context,
