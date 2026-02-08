@@ -23,7 +23,6 @@ import android.os.Looper
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import android.text.format.DateUtils
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
@@ -77,27 +76,18 @@ class CoverLrcView @JvmOverloads constructor(
     private var isFling = false
     private var mTextGravity // 歌词显示位置，靠左/居中/靠右
             = 0
-    private val hideTimelineRunnable = Runnable {
-        if (hasLrc() && isShowTimeline) {
-            isShowTimeline = false
-            smoothScrollTo(mCurrentLine)
-        }
-    }
 
     private val viewScope = CoroutineScope(Dispatchers.Main + Job())
 
     private val mSimpleOnGestureListener: SimpleOnGestureListener =
         object : SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean {
-                if (hasLrc() && mOnPlayClickListener != null) {
+                if (hasLrc()) {
                     if (mOffset != getOffset(0)) {
                         parent.requestDisallowInterceptTouchEvent(true)
                     }
                     mScroller!!.forceFinished(true)
-                    removeCallbacks(hideTimelineRunnable)
                     isTouching = true
-                    isShowTimeline = true
-                    invalidate()
                     return true
                 }
                 return super.onDown(e)
@@ -147,30 +137,36 @@ class CoverLrcView @JvmOverloads constructor(
             }
 
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                if (hasLrc()
-                    && isShowTimeline
-                    && mPlayDrawable!!.bounds.contains(e.x.toInt(), e.y.toInt())
-                ) {
-                    val centerLine = centerLine
-                    val centerLineTime = mLrcEntryList[centerLine].time
-                    // onPlayClick 消费了才更新 UI
-                    if (mOnPlayClickListener != null && mOnPlayClickListener!!.onPlayClick(
-                            centerLineTime
-                        )
-                    ) {
-                        isShowTimeline = false
-                        removeCallbacks(hideTimelineRunnable)
-                        mCurrentLine = centerLine
-                        animateCurrentTextSize()
-                        return true
+                if (hasLrc() && mOnPlayClickListener != null) {
+                    val tappedLine = getTappedLine(e.y - mOffset)
+                    if (tappedLine in mLrcEntryList.indices) {
+                        val tappedLineTime = mLrcEntryList[tappedLine].time
+                        if (mOnPlayClickListener!!.onPlayClick(tappedLineTime)) {
+                            mCurrentLine = tappedLine
+                            smoothScrollTo(mCurrentLine, ADJUST_DURATION)
+                            animateCurrentTextSize()
+                            invalidate()
+                            return true
+                        }
                     }
-                } else {
-                    callOnClick()
-                    return true
                 }
-                return super.onSingleTapConfirmed(e)
+                callOnClick()
+                return true
             }
         }
+
+    private fun getTappedLine(y: Float): Int {
+        var cumulativeHeight = 0f
+        for (i in mLrcEntryList.indices) {
+            val lineHeight = mLrcEntryList[i].height.toFloat()
+            val lineCenter = cumulativeHeight + lineHeight / 2f
+            if (abs(y - lineCenter) < lineHeight / 2f) {
+                return i
+            }
+            cumulativeHeight += lineHeight + mDividerHeight
+        }
+        return -1
+    }
 
     private fun init(attrs: AttributeSet?) {
         val ta = context.obtainStyledAttributes(attrs, R.styleable.LrcView)
@@ -339,7 +335,6 @@ class CoverLrcView @JvmOverloads constructor(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         if (changed) {
-            initPlayDrawable()
             initEntryList()
             if (hasLrc()) {
                 smoothScrollTo(mCurrentLine, 0L)
@@ -366,15 +361,6 @@ class CoverLrcView @JvmOverloads constructor(
             drawText(canvas, staticLayout, centerY.toFloat())
             return
         }
-        val centerLine = centerLine
-        if (isShowTimeline) {
-            mPlayDrawable?.draw(canvas)
-            mTimePaint.color = mTimeTextColor
-            val timeText = LrcUtils.formatTime(mLrcEntryList[centerLine].time)
-            val timeX = (width - mTimeTextWidth / 2).toFloat()
-            val timeY = centerY - (mTimeFontMetrics!!.descent + mTimeFontMetrics!!.ascent) / 2
-            canvas.drawText(timeText, timeX, timeY, mTimePaint)
-        }
         canvas.translate(0f, mOffset)
         var y = 0f
         for (i in mLrcEntryList.indices) {
@@ -385,8 +371,6 @@ class CoverLrcView @JvmOverloads constructor(
             if (i == mCurrentLine) {
                 mLrcPaint.textSize = mCurrentTextSize
                 mLrcPaint.color = mCurrentTextColor
-            } else if (isShowTimeline && i == centerLine) {
-                mLrcPaint.color = mTimelineTextColor
             } else {
                 mLrcPaint.textSize = mNormalTextSize
                 mLrcPaint.color = mNormalTextColor
@@ -397,7 +381,7 @@ class CoverLrcView @JvmOverloads constructor(
 
     private fun drawText(canvas: Canvas, staticLayout: StaticLayout, y: Float) {
         canvas.withSave {
-            translate(mLrcPadding, y - (staticLayout.height shr 1))
+            translate(paddingLeft + mLrcPadding, y - (staticLayout.height shr 1))
             staticLayout.draw(this)
         }
     }
@@ -422,7 +406,6 @@ class CoverLrcView @JvmOverloads constructor(
             isTouching = false
             if (hasLrc() && !isFling) {
                 adjustCenter()
-                postDelayed(hideTimelineRunnable, TIMELINE_KEEP_TIME)
             }
         }
         return mGestureDetector!!.onTouchEvent(event)
@@ -437,13 +420,11 @@ class CoverLrcView @JvmOverloads constructor(
             isFling = false
             if (hasLrc() && !isTouching) {
                 adjustCenter()
-                postDelayed(hideTimelineRunnable, TIMELINE_KEEP_TIME)
             }
         }
     }
 
     override fun onDetachedFromWindow() {
-        removeCallbacks(hideTimelineRunnable)
         viewScope.cancel()
         super.onDetachedFromWindow()
     }
@@ -481,7 +462,6 @@ class CoverLrcView @JvmOverloads constructor(
         isShowTimeline = false
         isTouching = false
         isFling = false
-        removeCallbacks(hideTimelineRunnable)
         mLrcEntryList.clear()
         mOffset = 0f
         mCurrentLine = 0
@@ -557,7 +537,7 @@ class CoverLrcView @JvmOverloads constructor(
     }
 
     private val lrcWidth: Float
-        get() = width - mLrcPadding * 2
+        get() = width - paddingLeft - paddingRight - mLrcPadding * 2
 
     private fun runOnUi(r: Runnable) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -573,7 +553,6 @@ class CoverLrcView @JvmOverloads constructor(
 
     companion object {
         private const val ADJUST_DURATION: Long = 100
-        private const val TIMELINE_KEEP_TIME = 4 * DateUtils.SECOND_IN_MILLIS
     }
 
     init {

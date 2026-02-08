@@ -37,7 +37,7 @@
             app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior"
             app:lrcLabel="@string/no_lyrics_found"
             app:lrcNormalTextSize="28sp"
-            app:lrcPadding="24dp"
+            app:lrcPadding="16dp"
             app:lrcTextGravity="left"
             app:lrcTextSize="32sp"
             app:lrcTimelineColor="@color/transparent"
