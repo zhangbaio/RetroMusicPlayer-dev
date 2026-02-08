@@ -48,13 +48,18 @@ class WebDAVViewModel(
     val uiState: LiveData<WebDAVUiState> = _uiState
     private var syncWorkObserverJob: Job? = null
 
+    private fun postUiState(state: WebDAVUiState) {
+        if (_uiState.value == state) return
+        _uiState.postValue(state)
+    }
+
     fun loadConfigs() {
         viewModelScope.launch {
             try {
                 val configList = repository.getAllConfigs()
                 _configs.postValue(configList)
             } catch (e: Exception) {
-                _uiState.postValue(WebDAVUiState.Error(e.message ?: "Unknown error"))
+                postUiState(WebDAVUiState.Error(e.message ?: "Unknown error"))
             }
         }
     }
@@ -64,9 +69,9 @@ class WebDAVViewModel(
             try {
                 repository.saveConfig(config)
                 loadConfigs()
-                _uiState.postValue(WebDAVUiState.ConfigSaved)
+                postUiState(WebDAVUiState.ConfigSaved)
             } catch (e: Exception) {
-                _uiState.postValue(WebDAVUiState.Error(e.message ?: "Failed to save config"))
+                postUiState(WebDAVUiState.Error(e.message ?: "Failed to save config"))
             }
         }
     }
@@ -76,9 +81,9 @@ class WebDAVViewModel(
             try {
                 repository.saveConfig(config)
                 loadConfigs()
-                _uiState.postValue(WebDAVUiState.ConfigSaved)
+                postUiState(WebDAVUiState.ConfigSaved)
             } catch (e: Exception) {
-                _uiState.postValue(WebDAVUiState.Error(e.message ?: "Failed to update config"))
+                postUiState(WebDAVUiState.Error(e.message ?: "Failed to update config"))
             }
         }
     }
@@ -88,9 +93,9 @@ class WebDAVViewModel(
             try {
                 repository.deleteConfig(config)
                 loadConfigs()
-                _uiState.postValue(WebDAVUiState.ConfigDeleted)
+                postUiState(WebDAVUiState.ConfigDeleted)
             } catch (e: Exception) {
-                _uiState.postValue(WebDAVUiState.Error(e.message ?: "Failed to delete config"))
+                postUiState(WebDAVUiState.Error(e.message ?: "Failed to delete config"))
             }
         }
     }
@@ -98,19 +103,19 @@ class WebDAVViewModel(
     fun testConnection(config: WebDAVConfig) {
         viewModelScope.launch {
             try {
-                _uiState.postValue(WebDAVUiState.TestingConnection)
+                postUiState(WebDAVUiState.TestingConnection)
                 val result = repository.testConnection(config)
                 if (result.isSuccess) {
-                    _uiState.postValue(WebDAVUiState.ConnectionSuccess)
+                    postUiState(WebDAVUiState.ConnectionSuccess)
                 } else {
-                    _uiState.postValue(
+                    postUiState(
                         WebDAVUiState.Error(
                             result.exceptionOrNull()?.message ?: "Connection failed"
                         )
                     )
                 }
             } catch (e: Exception) {
-                _uiState.postValue(WebDAVUiState.Error(e.message ?: "Connection test failed"))
+                postUiState(WebDAVUiState.Error(e.message ?: "Connection test failed"))
             }
         }
     }
@@ -118,7 +123,6 @@ class WebDAVViewModel(
     fun syncConfig(configId: Long) {
         viewModelScope.launch {
             try {
-                _uiState.postValue(WebDAVUiState.Syncing)
                 val request = WebDAVSyncWorker.createRequest(configId)
                 workManager.enqueueUniqueWork(
                     WebDAVSyncWorker.uniqueWorkName(configId),
@@ -128,7 +132,7 @@ class WebDAVViewModel(
 
                 observeSyncWork(configId)
             } catch (e: Exception) {
-                _uiState.postValue(WebDAVUiState.Error(e.message ?: "Sync failed"))
+                postUiState(WebDAVUiState.Error(e.message ?: "Sync failed"))
             }
         }
     }
@@ -143,7 +147,7 @@ class WebDAVViewModel(
                     when (info.state) {
                         WorkInfo.State.ENQUEUED,
                         WorkInfo.State.BLOCKED -> {
-                            _uiState.postValue(WebDAVUiState.Syncing)
+                            postUiState(WebDAVUiState.Syncing)
                         }
 
                         WorkInfo.State.RUNNING -> {
@@ -156,7 +160,7 @@ class WebDAVViewModel(
                                 0
                             )
                             if (total > 0) {
-                                _uiState.postValue(
+                                postUiState(
                                     WebDAVUiState.SyncProgress(
                                         configId = configId,
                                         completedFolders = completed,
@@ -175,12 +179,12 @@ class WebDAVViewModel(
                                     )
                                 )
                             } else {
-                                _uiState.postValue(WebDAVUiState.Syncing)
+                                postUiState(WebDAVUiState.Syncing)
                             }
                         }
 
                         WorkInfo.State.SUCCEEDED -> {
-                            _uiState.postValue(
+                            postUiState(
                                 WebDAVUiState.SyncComplete(
                                     info.outputData.getInt(
                                         WebDAVSyncWorker.KEY_OUTPUT_SYNCED_COUNT,
@@ -192,7 +196,7 @@ class WebDAVViewModel(
                         }
 
                         WorkInfo.State.FAILED -> {
-                            _uiState.postValue(
+                            postUiState(
                                 WebDAVUiState.Error(
                                     info.outputData.getString(WebDAVSyncWorker.KEY_OUTPUT_ERROR)
                                         ?: "Sync failed"
@@ -202,7 +206,7 @@ class WebDAVViewModel(
                         }
 
                         WorkInfo.State.CANCELLED -> {
-                            _uiState.postValue(WebDAVUiState.Error("Sync cancelled"))
+                            postUiState(WebDAVUiState.Error("Sync cancelled"))
                             cancel()
                         }
                     }
@@ -223,13 +227,13 @@ class WebDAVViewModel(
                 _songs.postValue(songList)
             } catch (e: Exception) {
                 android.util.Log.e("WebDAVViewModel", "Failed to load songs", e)
-                _uiState.postValue(WebDAVUiState.Error(e.message ?: "Failed to load songs"))
+                postUiState(WebDAVUiState.Error(e.message ?: "Failed to load songs"))
             }
         }
     }
 
     fun clearState() {
-        _uiState.postValue(WebDAVUiState.Idle)
+        postUiState(WebDAVUiState.Idle)
     }
 
     override fun onCleared() {

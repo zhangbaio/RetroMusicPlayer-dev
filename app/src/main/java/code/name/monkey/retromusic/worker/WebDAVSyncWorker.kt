@@ -34,6 +34,9 @@ class WebDAVSyncWorker(
     private val repository: WebDAVRepository by lazy {
         KoinJavaComponent.get(WebDAVRepository::class.java)
     }
+    private val notificationManager: NotificationManager? by lazy {
+        applicationContext.getSystemService(Service.NOTIFICATION_SERVICE) as? NotificationManager
+    }
     private var syncStartedAtMs: Long = 0L
 
     override suspend fun doWork(): Result {
@@ -118,9 +121,10 @@ class WebDAVSyncWorker(
                 KEY_PROGRESS_FAILED to progress.failed
             )
         )
-        if (!isStopped) {
-            setForeground(createForegroundInfo(configId, retryFailedOnly, progress))
-        }
+        if (isStopped) return
+        ensureNotificationChannel(applicationContext)
+        val notification = createNotification(configId, retryFailedOnly, progress)
+        notificationManager?.notify(notificationId(configId, retryFailedOnly), notification)
     }
 
     private fun createForegroundInfo(
@@ -129,7 +133,20 @@ class WebDAVSyncWorker(
         progress: WebDAVSyncProgress?
     ): ForegroundInfo {
         ensureNotificationChannel(applicationContext)
+        val notification = createNotification(configId, retryFailedOnly, progress)
+        val id = notificationId(configId, retryFailedOnly)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(id, notification)
+        }
+    }
 
+    private fun createNotification(
+        configId: Long,
+        retryFailedOnly: Boolean,
+        progress: WebDAVSyncProgress?
+    ): android.app.Notification {
         val completed = progress?.completedFolders ?: 0
         val total = progress?.totalFolders ?: 0
         val remaining = (total - completed).coerceAtLeast(0)
@@ -202,13 +219,7 @@ class WebDAVSyncWorker(
                 }
             }
             .build()
-
-        val id = notificationId(configId, retryFailedOnly)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(id, notification)
-        }
+        return notification
     }
 
     companion object {
