@@ -273,7 +273,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
     private fun updateHeaderInfo() {
         val song = MusicPlayerRemote.currentSong
-        binding.headerTitle?.setText(song.title)
+        binding.headerTitle?.setText(song.displayTitle)
         binding.headerArtist?.setText(song.displayArtistName)
 
         binding.smallAlbumArt?.let { imageView ->

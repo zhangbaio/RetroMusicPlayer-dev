@@ -24,12 +24,12 @@ import android.provider.MediaStore.Audio.AudioColumns;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
-import code.name.monkey.retromusic.App;
 import code.name.monkey.retromusic.Constants;
+import code.name.monkey.retromusic.model.SourceType;
 import code.name.monkey.retromusic.model.Song;
-import code.name.monkey.retromusic.repository.RealSongRepository;
 
 /**
  * @author Andrew Neal, modified for Phonograph by Karim Abou Zeid
@@ -43,7 +43,14 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
 
   public static final String ORIGINAL_PLAYING_QUEUE_TABLE_NAME = "original_playing_queue";
 
-  private static final int VERSION = 12;
+  private static final int VERSION = 13;
+
+  private static final String COLUMN_QUEUE_POSITION = "queue_position";
+  private static final String COLUMN_ALBUM_ARTIST = "album_artist";
+  private static final String COLUMN_SOURCE_TYPE = "source_type";
+  private static final String COLUMN_REMOTE_PATH = "remote_path";
+  private static final String COLUMN_WEBDAV_CONFIG_ID = "webdav_config_id";
+  private static final String COLUMN_WEBDAV_ALBUM_ART_PATH = "webdav_album_art_path";
 
   @Nullable private static MusicPlaybackQueueStore sInstance = null;
 
@@ -117,6 +124,9 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
     builder.append(BaseColumns._ID);
     builder.append(" INT NOT NULL,");
 
+    builder.append(COLUMN_QUEUE_POSITION);
+    builder.append(" INT NOT NULL,");
+
     builder.append(AudioColumns.TITLE);
     builder.append(" STRING NOT NULL,");
 
@@ -150,7 +160,19 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
     builder.append(AudioColumns.COMPOSER);
     builder.append(" STRING,");
 
-    builder.append("album_artist");
+    builder.append(COLUMN_ALBUM_ARTIST);
+    builder.append(" STRING,");
+
+    builder.append(COLUMN_SOURCE_TYPE);
+    builder.append(" STRING NOT NULL,");
+
+    builder.append(COLUMN_REMOTE_PATH);
+    builder.append(" STRING,");
+
+    builder.append(COLUMN_WEBDAV_CONFIG_ID);
+    builder.append(" LONG,");
+
+    builder.append(COLUMN_WEBDAV_ALBUM_ART_PATH);
     builder.append(" STRING);");
 
     db.execSQL(builder.toString());
@@ -158,8 +180,23 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
 
   @NonNull
   private List<Song> getQueue(@NonNull final String tableName) {
-    Cursor cursor = getReadableDatabase().query(tableName, null, null, null, null, null, null);
-    return new RealSongRepository(App.Companion.getContext()).songs(cursor);
+    final ArrayList<Song> queue = new ArrayList<>();
+    Cursor cursor =
+        getReadableDatabase()
+            .query(tableName, null, null, null, null, null, COLUMN_QUEUE_POSITION + " ASC");
+    if (cursor == null) {
+      return queue;
+    }
+    try {
+      if (cursor.moveToFirst()) {
+        do {
+          queue.add(songFromCursor(cursor));
+        } while (cursor.moveToNext());
+      }
+    } finally {
+      cursor.close();
+    }
+    return queue;
   }
 
   /**
@@ -186,9 +223,10 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
       try {
         for (int i = position; i < queue.size() && i < position + NUM_PROCESS; i++) {
           Song song = queue.get(i);
-          ContentValues values = new ContentValues(4);
+          ContentValues values = new ContentValues(18);
 
           values.put(BaseColumns._ID, song.getId());
+          values.put(COLUMN_QUEUE_POSITION, i);
           values.put(AudioColumns.TITLE, song.getTitle());
           values.put(AudioColumns.TRACK, song.getTrackNumber());
           values.put(AudioColumns.YEAR, song.getYear());
@@ -200,6 +238,15 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
           values.put(AudioColumns.ARTIST_ID, song.getArtistId());
           values.put(AudioColumns.ARTIST, song.getArtistName());
           values.put(AudioColumns.COMPOSER, song.getComposer());
+          values.put(COLUMN_ALBUM_ARTIST, song.getAlbumArtist());
+          values.put(COLUMN_SOURCE_TYPE, song.getSourceType().name());
+          values.put(COLUMN_REMOTE_PATH, song.getRemotePath());
+          if (song.getWebDavConfigId() != null) {
+            values.put(COLUMN_WEBDAV_CONFIG_ID, song.getWebDavConfigId());
+          } else {
+            values.putNull(COLUMN_WEBDAV_CONFIG_ID);
+          }
+          values.put(COLUMN_WEBDAV_ALBUM_ART_PATH, song.getWebDavAlbumArtPath());
 
           database.insert(tableName, null, values);
         }
@@ -209,5 +256,119 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
         position += NUM_PROCESS;
       }
     }
+  }
+
+  @NonNull
+  private Song songFromCursor(@NonNull Cursor cursor) {
+    final long id = getLong(cursor, BaseColumns._ID, -1L);
+    final String title = getString(cursor, AudioColumns.TITLE, "");
+    final int trackNumber = getInt(cursor, AudioColumns.TRACK, 0);
+    final int year = getInt(cursor, AudioColumns.YEAR, 0);
+    final long duration = getLong(cursor, AudioColumns.DURATION, 0L);
+    final String data = getString(cursor, Constants.DATA, "");
+    final long dateModified = getLong(cursor, AudioColumns.DATE_MODIFIED, 0L);
+    final long albumId = getLong(cursor, AudioColumns.ALBUM_ID, 0L);
+    final String albumName = getString(cursor, AudioColumns.ALBUM, "");
+    final long artistId = getLong(cursor, AudioColumns.ARTIST_ID, 0L);
+    final String artistName = getString(cursor, AudioColumns.ARTIST, "");
+    final String composer = getNullableString(cursor, AudioColumns.COMPOSER);
+    final String albumArtist = getNullableString(cursor, COLUMN_ALBUM_ARTIST);
+    final SourceType sourceType =
+        resolveSourceType(getNullableString(cursor, COLUMN_SOURCE_TYPE), data);
+    final String remotePath =
+        resolveRemotePath(sourceType, getNullableString(cursor, COLUMN_REMOTE_PATH), data);
+    final Long webDavConfigId = getNullableLong(cursor, COLUMN_WEBDAV_CONFIG_ID);
+    final String webDavAlbumArtPath = getNullableString(cursor, COLUMN_WEBDAV_ALBUM_ART_PATH);
+    return new Song(
+        id,
+        title,
+        trackNumber,
+        year,
+        duration,
+        data,
+        dateModified,
+        albumId,
+        albumName,
+        artistId,
+        artistName,
+        composer,
+        albumArtist,
+        sourceType,
+        remotePath,
+        webDavConfigId,
+        webDavAlbumArtPath);
+  }
+
+  @NonNull
+  private SourceType resolveSourceType(@Nullable String rawValue, @NonNull String data) {
+    if (rawValue != null) {
+      try {
+        return SourceType.valueOf(rawValue);
+      } catch (IllegalArgumentException ignored) {
+        // Fall back to URL sniffing for rows written before source_type existed.
+      }
+    }
+    if (data.startsWith("http://") || data.startsWith("https://")) {
+      return SourceType.WEBDAV;
+    }
+    return SourceType.LOCAL;
+  }
+
+  @Nullable
+  private String resolveRemotePath(
+      @NonNull SourceType sourceType, @Nullable String remotePath, @NonNull String data) {
+    if (remotePath != null && !remotePath.trim().isEmpty()) {
+      return remotePath;
+    }
+    if (sourceType == SourceType.WEBDAV
+        && (data.startsWith("http://") || data.startsWith("https://"))) {
+      return data;
+    }
+    return null;
+  }
+
+  private int getInt(@NonNull Cursor cursor, @NonNull String columnName, int defaultValue) {
+    final int index = cursor.getColumnIndex(columnName);
+    if (index < 0 || cursor.isNull(index)) {
+      return defaultValue;
+    }
+    return cursor.getInt(index);
+  }
+
+  private long getLong(@NonNull Cursor cursor, @NonNull String columnName, long defaultValue) {
+    final int index = cursor.getColumnIndex(columnName);
+    if (index < 0 || cursor.isNull(index)) {
+      return defaultValue;
+    }
+    return cursor.getLong(index);
+  }
+
+  @Nullable
+  private Long getNullableLong(@NonNull Cursor cursor, @NonNull String columnName) {
+    final int index = cursor.getColumnIndex(columnName);
+    if (index < 0 || cursor.isNull(index)) {
+      return null;
+    }
+    return cursor.getLong(index);
+  }
+
+  @NonNull
+  private String getString(
+      @NonNull Cursor cursor, @NonNull String columnName, @NonNull String defaultValue) {
+    final int index = cursor.getColumnIndex(columnName);
+    if (index < 0 || cursor.isNull(index)) {
+      return defaultValue;
+    }
+    final String value = cursor.getString(index);
+    return value == null ? defaultValue : value;
+  }
+
+  @Nullable
+  private String getNullableString(@NonNull Cursor cursor, @NonNull String columnName) {
+    final int index = cursor.getColumnIndex(columnName);
+    if (index < 0 || cursor.isNull(index)) {
+      return null;
+    }
+    return cursor.getString(index);
   }
 }

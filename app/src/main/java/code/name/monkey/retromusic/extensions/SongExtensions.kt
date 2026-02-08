@@ -25,7 +25,7 @@ fun ArrayList<Song>.toMediaSessionQueue(): List<QueueItem> {
     return map { song ->
         val mediaDescription = MediaDescriptionCompat.Builder()
             .setMediaId(song.id.toString())
-            .setTitle(song.title)
+            .setTitle(song.displayTitle)
             .setSubtitle(song.artistName)
             .setIconUri(song.albumArtUri)
             .build()

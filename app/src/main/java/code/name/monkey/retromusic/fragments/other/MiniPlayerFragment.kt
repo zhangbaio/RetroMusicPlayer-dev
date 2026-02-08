@@ -92,11 +92,10 @@ open class MiniPlayerFragment : AbsMusicServiceFragment(R.layout.fragment_mini_p
     private fun updateSongTitle() {
 
         val song = MusicPlayerRemote.currentSong
-        android.util.Log.d("MiniPlayerFragment", "updateSongTitle: song.id=${song.id}, title='${song.title}', artist='${song.displayArtistName}', sourceType=${song.sourceType}")
 
         val builder = SpannableStringBuilder()
 
-        val title = song.title.toSpannable()
+        val title = song.displayTitle.toSpannable()
         title.setSpan(ForegroundColorSpan(textColorPrimary()), 0, title.length, 0)
 
         val text = song.displayArtistName.toSpannable()
@@ -109,7 +108,6 @@ open class MiniPlayerFragment : AbsMusicServiceFragment(R.layout.fragment_mini_p
 
         binding.miniPlayerTitle.isSelected = true
         binding.miniPlayerTitle.text = builder
-        android.util.Log.d("MiniPlayerFragment", "updateSongTitle: set text to '$builder'")
 
 //        binding.title.isSelected = true
 //        binding.title.text = song.title

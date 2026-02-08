@@ -15,7 +15,7 @@ class PersistentStorage(context: Context) {
     fun saveSong(song: Song) {
         prefs.edit {
             putLong("song_id", song.id)
-            putString("song_title", song.title)
+            putString("song_title", song.displayTitle)
             putString("song_artist", song.artistName)
             putString("song_cover", song.albumArtUri.toString())
         }

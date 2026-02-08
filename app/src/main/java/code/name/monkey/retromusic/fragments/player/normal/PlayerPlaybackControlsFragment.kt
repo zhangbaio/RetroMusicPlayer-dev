@@ -14,6 +14,8 @@
  */
 package code.name.monkey.retromusic.fragments.player.normal
 
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.view.animation.DecelerateInterpolator
@@ -21,16 +23,12 @@ import android.widget.ImageButton
 import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
-import code.name.monkey.appthemehelper.util.ATHUtil
-import code.name.monkey.appthemehelper.util.ColorUtil
-import code.name.monkey.appthemehelper.util.MaterialValueHelper
 import code.name.monkey.retromusic.R
 import code.name.monkey.retromusic.databinding.FragmentPlayerPlaybackControlsBinding
 import code.name.monkey.retromusic.extensions.*
 import code.name.monkey.retromusic.fragments.base.AbsPlayerControlsFragment
 import code.name.monkey.retromusic.fragments.base.goToArtist
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
-import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
 import com.google.android.material.slider.Slider
 
@@ -72,6 +70,8 @@ class PlayerPlaybackControlsFragment :
 
         setUpPlayPauseFab()
         setUpSongInfo()
+        applyWhiteTextColors()
+        applyWhiteIconColors()
         binding.progressSlider.addOnLayoutChangeListener(progressSliderLayoutChangeListener)
         binding.root.post { alignToProgressTrack() }
     }
@@ -103,6 +103,7 @@ class PlayerPlaybackControlsFragment :
         binding.songFavourite.setImageDrawable(
             requireContext().getDrawable(icon)
         )
+        binding.songFavourite.imageTintList = ColorStateList.valueOf(Color.WHITE)
     }
 
     private fun showSongMenu(view: View) {
@@ -116,7 +117,7 @@ class PlayerPlaybackControlsFragment :
 
     fun updateSongInfo() {
         val song = MusicPlayerRemote.currentSong
-        binding.title.text = song.title
+        binding.title.text = song.displayTitle
         binding.text.text = song.displayArtistName
     }
 
@@ -129,34 +130,35 @@ class PlayerPlaybackControlsFragment :
     }
 
     override fun setColor(color: MediaNotificationProcessor) {
-        val colorBg = ATHUtil.resolveColor(requireContext(), android.R.attr.colorBackground)
-        if (ColorUtil.isColorLight(colorBg)) {
-            lastPlaybackControlsColor =
-                MaterialValueHelper.getSecondaryTextColor(requireContext(), true)
-            lastDisabledPlaybackControlsColor =
-                MaterialValueHelper.getSecondaryDisabledTextColor(requireContext(), true)
-        } else {
-            lastPlaybackControlsColor =
-                MaterialValueHelper.getPrimaryTextColor(requireContext(), false)
-            lastDisabledPlaybackControlsColor =
-                MaterialValueHelper.getPrimaryDisabledTextColor(requireContext(), false)
-        }
-
-        val colorFinal = if (PreferenceUtil.isAdaptiveColor) {
-            color.primaryTextColor
-        } else {
-            accentColor()
-        }.ripAlpha()
+        val white = Color.WHITE
+        lastPlaybackControlsColor = white
+        lastDisabledPlaybackControlsColor = white
 
         // Tint playback control icons
         binding.playPauseButton.setColorFilter(lastPlaybackControlsColor)
         binding.previousButton.setColorFilter(lastPlaybackControlsColor)
         binding.nextButton.setColorFilter(lastPlaybackControlsColor)
-        binding.progressSlider.applyColor(colorFinal)
-        volumeFragment?.setTintable(colorFinal)
+        binding.progressSlider.applyColor(white)
+        applyWhiteIconColors()
+        applyWhiteTextColors()
+        volumeFragment?.setTintable(white)
         updateRepeatState()
         updateShuffleState()
         updatePrevNextColor()
+    }
+
+    private fun applyWhiteIconColors() {
+        val whiteTint = ColorStateList.valueOf(Color.WHITE)
+        binding.songFavourite.imageTintList = whiteTint
+        binding.songMenu.imageTintList = whiteTint
+    }
+
+    private fun applyWhiteTextColors() {
+        binding.title.setTextColor(Color.WHITE)
+        binding.text.setTextColor(Color.WHITE)
+        binding.songInfo.setTextColor(Color.WHITE)
+        binding.songCurrentProgress.setTextColor(Color.WHITE)
+        binding.songTotalTime.setTextColor(Color.WHITE)
     }
 
     override fun onServiceConnected() {

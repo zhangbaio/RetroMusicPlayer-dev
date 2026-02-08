@@ -13,6 +13,7 @@
  */
 package code.name.monkey.retromusic.model
 
+import android.net.Uri
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
@@ -53,6 +54,33 @@ open class Song(
                 return ""
             }
             return artistName
+        }
+
+    val displayTitle: String
+        get() {
+            val normalizedTitle = title.trim()
+            if (normalizedTitle.isNotEmpty()) {
+                return title
+            }
+            val candidatePath = (remotePath ?: data).trim()
+            if (candidatePath.isEmpty()) {
+                return ""
+            }
+            val fileName = candidatePath
+                .substringBefore('?')
+                .substringBefore('#')
+                .substringAfterLast('/')
+                .substringAfterLast('\\')
+                .trim()
+            if (fileName.isEmpty()) {
+                return ""
+            }
+            val decoded = Uri.decode(fileName)
+            val stripped = decoded.substringBeforeLast('.', decoded)
+                .replace('_', ' ')
+                .replace('+', ' ')
+                .trim()
+            return if (stripped.isNotEmpty()) stripped else decoded
         }
 
 

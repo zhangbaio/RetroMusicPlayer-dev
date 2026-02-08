@@ -1039,7 +1039,7 @@ class MusicService : MediaBrowserServiceCompat(),
         intent.putExtra("id", song.id)
         intent.putExtra("artist", song.artistName)
         intent.putExtra("album", song.albumName)
-        intent.putExtra("track", song.title)
+        intent.putExtra("track", song.displayTitle)
         intent.putExtra("duration", song.duration)
         intent.putExtra("position", songProgressMillis.toLong())
         intent.putExtra("playing", isPlaying)
@@ -1087,7 +1087,7 @@ class MusicService : MediaBrowserServiceCompat(),
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artistName)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ARTIST, song.albumArtist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, song.albumName)
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.displayTitle)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, song.duration)
             .putLong(
                 MediaMetadataCompat.METADATA_KEY_TRACK_NUMBER,
