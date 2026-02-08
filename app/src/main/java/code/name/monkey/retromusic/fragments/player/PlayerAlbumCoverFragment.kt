@@ -68,9 +68,13 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
     val viewPager get() = binding.viewPager
 
     private val colorReceiver = object : AlbumCoverFragment.ColorReceiver {
-        override fun onColorReady(color: MediaNotificationProcessor, request: Int) {
+        override fun onColorReady(
+            color: MediaNotificationProcessor,
+            dominantColor: Int?,
+            request: Int
+        ) {
             if (currentPosition == request) {
-                notifyColorChange(color)
+                notifyColorChange(color, dominantColor)
             }
         }
     }
@@ -203,6 +207,12 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
         progressViewUpdateHelper = MusicProgressViewUpdateHelper(this, 500, 1000)
         maybeInitLyrics()
         lrcView.apply {
+            val white = android.graphics.Color.WHITE
+            setCurrentColor(white)
+            setNormalColor(white)
+            setTimelineTextColor(white)
+            setTimelineColor(white)
+            setTimeTextColor(white)
             setDraggable(true) { time ->
                 MusicPlayerRemote.seekTo(time.toInt())
                 MusicPlayerRemote.resumePlaying()
@@ -294,12 +304,13 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
     }
 
     private fun setLRCViewColors(@ColorInt primaryColor: Int, @ColorInt secondaryColor: Int) {
+        val white = android.graphics.Color.WHITE
         lrcView.apply {
-            setCurrentColor(primaryColor)
-            setTimeTextColor(primaryColor)
-            setTimelineColor(primaryColor)
-            setNormalColor(secondaryColor)
-            setTimelineTextColor(primaryColor)
+            setCurrentColor(white)
+            setTimeTextColor(white)
+            setTimelineColor(white)
+            setNormalColor(white)
+            setTimelineTextColor(white)
         }
     }
 
@@ -418,7 +429,10 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
     }
 
 
-    private fun notifyColorChange(color: MediaNotificationProcessor) {
+    private fun notifyColorChange(color: MediaNotificationProcessor, dominantColor: Int?) {
+        dominantColor?.let {
+            callbacks?.onAdaptiveCoverColorChanged(it)
+        }
         callbacks?.onColorChanged(color)
         val primaryColor = MaterialValueHelper.getPrimaryTextColor(
             requireContext(),
@@ -448,6 +462,8 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
     interface Callbacks {
 
         fun onColorChanged(color: MediaNotificationProcessor)
+
+        fun onAdaptiveCoverColorChanged(@ColorInt dominantColor: Int) {}
 
         fun onFavoriteToggled()
 

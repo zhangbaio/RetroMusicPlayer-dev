@@ -33,12 +33,15 @@ import code.name.monkey.retromusic.glide.RetroGlideExtension
 import code.name.monkey.retromusic.glide.RetroGlideExtension.asBitmapPalette
 import code.name.monkey.retromusic.glide.RetroGlideExtension.songCoverOptions
 import code.name.monkey.retromusic.glide.RetroMusicColoredTarget
+import code.name.monkey.retromusic.glide.palette.BitmapPaletteWrapper
 import code.name.monkey.retromusic.misc.CustomFragmentStatePagerAdapter
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
+import code.name.monkey.retromusic.util.color.PlayerAdaptiveColorUtil
 import com.bumptech.glide.Glide
+import com.bumptech.glide.request.transition.Transition
 import com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +106,7 @@ class AlbumCoverPagerAdapter(
         private lateinit var song: Song
         private var colorReceiver: ColorReceiver? = null
         private var request: Int = 0
+        private var dominantCoverColor: Int? = null
         private val mainActivity get() = activity as MainActivity
 
         override fun onCreate(savedInstanceState: Bundle?) {
@@ -184,6 +188,17 @@ class AlbumCoverPagerAdapter(
                 .load(RetroGlideExtension.getSongModel(song))
                 .dontAnimate()
                 .into(object : RetroMusicColoredTarget(albumCover) {
+                    override fun onResourceReady(
+                        resource: BitmapPaletteWrapper,
+                        transition: Transition<in BitmapPaletteWrapper>?
+                    ) {
+                        dominantCoverColor = PlayerAdaptiveColorUtil.extractDominantColor(
+                            resource.palette,
+                            defaultFooterColor
+                        )
+                        super.onResourceReady(resource, transition)
+                    }
+
                     override fun onColorReady(colors: MediaNotificationProcessor) {
                         setColor(colors)
                     }
@@ -194,14 +209,14 @@ class AlbumCoverPagerAdapter(
             this.color = color
             isColorReady = true
             if (colorReceiver != null) {
-                colorReceiver!!.onColorReady(color, request)
+                colorReceiver!!.onColorReady(color, dominantCoverColor, request)
                 colorReceiver = null
             }
         }
 
         internal fun receiveColor(colorReceiver: ColorReceiver, request: Int) {
             if (isColorReady) {
-                colorReceiver.onColorReady(color, request)
+                colorReceiver.onColorReady(color, dominantCoverColor, request)
             } else {
                 this.colorReceiver = colorReceiver
                 this.request = request
@@ -209,7 +224,7 @@ class AlbumCoverPagerAdapter(
         }
 
         interface ColorReceiver {
-            fun onColorReady(color: MediaNotificationProcessor, request: Int)
+            fun onColorReady(color: MediaNotificationProcessor, dominantColor: Int?, request: Int)
         }
 
         companion object {

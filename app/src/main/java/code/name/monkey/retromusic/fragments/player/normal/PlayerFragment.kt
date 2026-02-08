@@ -17,6 +17,8 @@ package code.name.monkey.retromusic.fragments.player.normal
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
@@ -54,8 +56,8 @@ import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.service.MusicService
 import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
-import code.name.monkey.retromusic.util.ViewUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
+import code.name.monkey.retromusic.util.color.PlayerAdaptiveColorUtil
 import code.name.monkey.retromusic.views.DrawableGradient
 import androidx.navigation.findNavController
 import androidx.navigation.navOptions
@@ -96,12 +98,16 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     private var recyclerViewTouchActionGuardManager: RecyclerViewTouchActionGuardManager? = null
     private var queueLayoutManager: LinearLayoutManager? = null
     private var isModeTransitionRunning = false
+    private var currentGradientTopColor: Int? = null
+    private var currentGradientBottomColor: Int? = null
+    private var pendingCoverDominantColor: Int? = null
 
     companion object {
         private const val FULLSCREEN_DELAY = 3000L // 3 seconds
         private const val MODE_SWITCH_OUT_DURATION = 140L
         private const val MODE_SWITCH_IN_DURATION = 220L
         private const val QUEUE_PROGRESS_TOP_GAP_DP = 10f
+        private const val BACKGROUND_COLOR_ANIM_DURATION = 700L
 
         fun newInstance(): PlayerFragment {
             return PlayerFragment()
@@ -109,29 +115,43 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
     }
 
 
-    private fun colorize(i: Int) {
+    private fun colorize(topColor: Int, bottomColor: Int) {
         if (valueAnimator != null) {
             valueAnimator?.cancel()
         }
 
-        valueAnimator = ValueAnimator.ofObject(
-            ArgbEvaluator(),
-            surfaceColor(),
-            i
-        )
+        val startTop = currentGradientTopColor ?: surfaceColor()
+        val startBottom = currentGradientBottomColor ?: surfaceColor()
+        val argbEvaluator = ArgbEvaluator()
+        valueAnimator = ValueAnimator.ofFloat(0f, 1f)
         valueAnimator?.addUpdateListener { animation ->
             if (isAdded) {
+                val fraction = animation.animatedFraction
+                val animatedTopColor = argbEvaluator.evaluate(fraction, startTop, topColor) as Int
+                val animatedBottomColor = argbEvaluator.evaluate(fraction, startBottom, bottomColor) as Int
+                currentGradientTopColor = animatedTopColor
+                currentGradientBottomColor = animatedBottomColor
                 val drawable = DrawableGradient(
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(
-                        animation.animatedValue as Int,
-                        surfaceColor()
+                        animatedTopColor,
+                        animatedBottomColor
                     ), 0
                 )
                 binding.colorGradientBackground.background = drawable
             }
         }
-        valueAnimator?.setDuration(ViewUtil.RETRO_MUSIC_ANIM_TIME.toLong())?.start()
+        valueAnimator?.setDuration(BACKGROUND_COLOR_ANIM_DURATION)?.start()
+    }
+
+    private fun applyGradientImmediately(topColor: Int, bottomColor: Int) {
+        currentGradientTopColor = topColor
+        currentGradientBottomColor = bottomColor
+        binding.colorGradientBackground.background = DrawableGradient(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(topColor, bottomColor),
+            0
+        )
     }
 
     override fun onShow() {
@@ -146,18 +166,34 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
 
     override fun onColorChanged(color: MediaNotificationProcessor) {
         controlsFragment.setColor(color)
-        lastColor = color.backgroundColor
-        libraryViewModel.updateColor(color.backgroundColor)
+        val dominantColor = pendingCoverDominantColor
+            ?.also { pendingCoverDominantColor = null }
+            ?: color.backgroundColor
+        if (PreferenceUtil.isAdaptiveColor) {
+            val gradientColors = PlayerAdaptiveColorUtil.buildGradientColors(
+                dominantColor = dominantColor,
+                fallbackSurfaceColor = surfaceColor()
+            )
+            colorize(gradientColors.topColor, gradientColors.bottomColor)
+            lastColor = gradientColors.topColor
+            libraryViewModel.updateColor(gradientColors.topColor)
+        } else {
+            val surfaceColor = surfaceColor()
+            colorize(surfaceColor, surfaceColor)
+            lastColor = surfaceColor
+            libraryViewModel.updateColor(surfaceColor)
+        }
 
         ToolbarContentTintHelper.colorizeToolbar(
             binding.playerToolbar,
             colorControlNormal(),
             requireActivity()
         )
+        applyWhiteTextPalette()
+    }
 
-        if (PreferenceUtil.isAdaptiveColor) {
-            colorize(color.backgroundColor)
-        }
+    override fun onAdaptiveCoverColorChanged(dominantColor: Int) {
+        pendingCoverDominantColor = dominantColor
     }
 
     override fun toggleFavorite(song: Song) {
@@ -178,6 +214,9 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         setUpSubFragments()
         setUpPlayerToolbar()
         setUpHeader()
+        val surfaceColor = surfaceColor()
+        applyGradientImmediately(surfaceColor, surfaceColor)
+        applyWhiteTextPalette()
         initFullscreenTimer()
         setupTapToExitFullscreen()
         startOrStopSnow(PreferenceUtil.isSnowFalling)
@@ -245,6 +284,24 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         }
 
         updateHeaderFavoriteIcon()
+    }
+
+    private fun applyWhiteTextPalette() {
+        val whiteTint = ColorStateList.valueOf(Color.WHITE)
+        binding.headerTitle?.setTextColor(Color.WHITE)
+        binding.headerArtist?.setTextColor(Color.WHITE)
+        binding.queueSectionTitle?.setTextColor(Color.WHITE)
+        binding.queueSectionSubtitle?.setTextColor(Color.WHITE)
+        binding.headerFavourite?.imageTintList = whiteTint
+        binding.headerMenu?.imageTintList = whiteTint
+        binding.actionLyrics?.imageTintList = whiteTint
+        binding.actionQueue?.imageTintList = whiteTint
+        binding.queueShuffleButton?.iconTint = whiteTint
+        binding.queueRepeatButton?.iconTint = whiteTint
+        binding.queueAutoplayButton?.iconTint = whiteTint
+        binding.queueShuffleButton?.setTextColor(Color.WHITE)
+        binding.queueRepeatButton?.setTextColor(Color.WHITE)
+        binding.queueAutoplayButton?.setTextColor(Color.WHITE)
     }
 
     private fun updateHeaderFavoriteIcon() {
@@ -678,7 +735,8 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
             requireActivity(),
             MusicPlayerRemote.playingQueue.toMutableList(),
             MusicPlayerRemote.position,
-            R.layout.item_queue
+            R.layout.item_queue,
+            forceWhiteText = true
         )
         wrappedAdapter = recyclerViewDragDropManager?.createWrappedAdapter(playingQueueAdapter!!)
 
@@ -750,6 +808,7 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
             resources.getQuantityString(R.plurals.albumSongs, remaining, remaining),
             MusicUtil.getReadableDurationString(duration)
         )
+        applyWhiteTextPalette()
     }
 
     private fun updateQueueIcon() {
@@ -761,8 +820,9 @@ class PlayerFragment : AbsPlayerFragment(R.layout.fragment_player),
         binding.actionQueue?.setImageDrawable(
             requireContext().getDrawable(icon)
         )
-        // 用 alpha 来表示激活状态
-        binding.actionQueue?.alpha = if (isQueueMode) 1.0f else 0.7f
+        // Keep queue icon color consistent with song title/artist white.
+        binding.actionQueue?.alpha = 1.0f
+        applyWhiteTextPalette()
     }
 
     private fun updateInlineQueue() {
