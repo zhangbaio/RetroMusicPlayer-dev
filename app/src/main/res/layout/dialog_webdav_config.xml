@@ -186,23 +186,28 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/addFolderButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
                 android:layout_marginTop="8dp"
-                android:text="Add Folder"
-                app:icon="@drawable/ic_add"
+                android:layout_marginEnd="4dp"
+                android:text="Add"
+                app:layout_constraintEnd_toStartOf="@id/testConnectionButton"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/foldersCard" />
+                app:layout_constraintTop_toBottomOf="@id/foldersCard"
+                tools:ignore="HardcodedText" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/testConnectionButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
                 android:layout_marginTop="8dp"
-                android:text="Test Connection"
+                android:layout_marginStart="4dp"
+                android:text="Test"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/foldersCard" />
+                app:layout_constraintStart_toEndOf="@id/addFolderButton"
+                app:layout_constraintTop_toBottomOf="@id/foldersCard"
+                tools:ignore="HardcodedText" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
