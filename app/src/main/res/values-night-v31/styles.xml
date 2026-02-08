@@ -1,9 +1,17 @@
 <resources>
     <style name="Theme.RetroMusic.MD3.Black" parent="@style/Theme.RetroMusic.MD3">
-        <item name="colorSurface">@color/blackColorSurface</item>
+        <item name="colorSurface">@color/apple_music_surface_black</item>
+        <item name="android:colorBackground">@color/apple_music_surface_black</item>
+        <item name="colorOnSurface">@color/apple_music_on_surface_dark</item>
+        <item name="colorOnBackground">@color/apple_music_on_surface_dark</item>
+        <item name="colorSurfaceVariant">@color/apple_music_surface_variant_dark</item>
+        <item name="colorOnSurfaceVariant">@color/apple_music_on_surface_variant_dark</item>
+        <item name="colorOutline">@color/apple_music_outline_dark</item>
+        <item name="android:textColorPrimary">@color/apple_music_on_surface_dark</item>
+        <item name="android:textColorSecondary">@color/apple_music_on_surface_variant_dark</item>
     </style>
 
     <style name="Theme.AppWidget" parent="@android:style/Theme.DeviceDefault.DayNight">
-        <item name="colorSurface">@android:color/system_accent2_800</item>
+        <item name="colorSurface">@color/apple_music_surface_variant_dark</item>
     </style>
 </resources>

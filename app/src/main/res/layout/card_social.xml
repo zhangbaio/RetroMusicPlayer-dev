@@ -21,7 +21,7 @@
             android:paddingBottom="?attr/listPreferredItemPaddingEnd"
             android:text="@string/social"
             android:textAppearance="@style/TextViewNormal"
-            android:textColor="?colorAccent"
+            android:textColor="?attr/colorPrimary"
             app:layout_constrainedWidth="true"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0"

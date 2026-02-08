@@ -58,10 +58,10 @@ class WhatsNewFragment : BottomSheetDialogFragment() {
             val accentColor = accentColor()
             binding.webView.setBackgroundColor(0)
             val contentColor = colorToCSS(Color.parseColor(if (isDark) "#ffffff" else "#000000"))
-            val textColor = colorToCSS(Color.parseColor(if (isDark) "#60FFFFFF" else "#80000000"))
+            val textColor = colorToCSS(Color.parseColor(if (isDark) "#8D8D93" else "#8A8A8E"))
             val accentColorString = colorToCSS(accentColor())
             val cardBackgroundColor =
-                colorToCSS(Color.parseColor(if (isDark) "#353535" else "#ffffff"))
+                colorToCSS(Color.parseColor(if (isDark) "#1C1C1E" else "#ffffff"))
             val accentTextColor = colorToCSS(
                 getPrimaryTextColor(
                     requireContext(), isColorLight(accentColor)

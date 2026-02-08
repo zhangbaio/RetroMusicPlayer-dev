@@ -10,7 +10,7 @@
             android:clipOrientation="vertical"
             android:gravity="bottom">
             <shape>
-                <solid android:color="@color/md_red_400" />
+                <solid android:color="@color/apple_music_accent_variant" />
             </shape>
         </clip>
     </item>
@@ -19,7 +19,7 @@
             android:clipOrientation="vertical"
             android:gravity="bottom">
             <shape>
-                <solid android:color="@color/md_deep_purple_A400" />
+                <solid android:color="@color/apple_music_accent" />
             </shape>
         </clip>
     </item>

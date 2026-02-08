@@ -15,6 +15,7 @@
 package code.name.monkey.retromusic
 
 import android.app.Application
+import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import cat.ereza.customactivityoncrash.config.CaocConfig
 import code.name.monkey.appthemehelper.ThemeStore
@@ -50,9 +51,20 @@ class App : Application() {
             modules(appModules)
         }
         // default theme
-        if (!ThemeStore.isConfigured(this, 3)) {
+        val legacyPurpleAccents = setOf(
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_300),
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_400),
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_A200),
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_A400),
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_500),
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_600),
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_700),
+            ContextCompat.getColor(this, code.name.monkey.appthemehelper.R.color.md_deep_purple_800),
+        )
+        val currentAccent = ThemeStore.accentColor(this)
+        if (!ThemeStore.isConfigured(this, 3) || currentAccent in legacyPurpleAccents) {
             ThemeStore.editTheme(this)
-                .accentColorRes(code.name.monkey.appthemehelper.R.color.md_deep_purple_A200)
+                .accentColorRes(R.color.apple_music_accent)
                 .coloredNavigationBar(true)
                 .commit()
         }

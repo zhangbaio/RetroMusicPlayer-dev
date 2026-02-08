@@ -17,5 +17,5 @@
     <gradient
         android:angle="270"
         android:endColor="@color/transparent"
-        android:startColor="@color/md_red_500" />
+        android:startColor="@color/apple_music_accent" />
 </shape>

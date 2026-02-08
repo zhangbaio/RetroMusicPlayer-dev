@@ -16,7 +16,6 @@ package code.name.monkey.retromusic.views
 
 import android.content.Context
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.util.AttributeSet
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
@@ -40,7 +39,10 @@ class ColorIconsImageView @JvmOverloads constructor(
     init {
         // Load the styled attributes and set their properties
         context.withStyledAttributes(attrs, R.styleable.ColorIconsImageView, 0, 0) {
-            val color = getColor(R.styleable.ColorIconsImageView_iconBackgroundColor, Color.RED)
+            val color = getColor(
+                R.styleable.ColorIconsImageView_iconBackgroundColor,
+                ContextCompat.getColor(context, R.color.apple_music_accent)
+            )
             setIconBackgroundColor(color)
         }
     }

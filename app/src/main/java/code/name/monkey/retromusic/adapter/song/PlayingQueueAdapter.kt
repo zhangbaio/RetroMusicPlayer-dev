@@ -14,6 +14,7 @@
  */
 package code.name.monkey.retromusic.adapter.song
 
+import android.graphics.Color
 import android.view.MenuItem
 import android.view.View
 import androidx.core.view.isVisible
@@ -44,6 +45,7 @@ class PlayingQueueAdapter(
     dataSet: MutableList<Song>,
     private var current: Int,
     itemLayoutRes: Int,
+    private val forceWhiteText: Boolean = false,
 ) : SongAdapter(activity, dataSet, itemLayoutRes),
     DraggableItemAdapter<PlayingQueueAdapter.ViewHolder>,
     SwipeableItemAdapter<PlayingQueueAdapter.ViewHolder>,
@@ -59,6 +61,13 @@ class PlayingQueueAdapter(
         super.onBindViewHolder(holder, position)
         val song = dataSet[position]
         holder.time?.text = MusicUtil.getReadableDurationString(song.duration)
+        if (forceWhiteText) {
+            holder.title?.setTextColor(Color.WHITE)
+            holder.text?.setTextColor(Color.WHITE)
+            holder.text2?.setTextColor(Color.WHITE)
+            holder.time?.setTextColor(Color.WHITE)
+            holder.imageText?.setTextColor(Color.WHITE)
+        }
         if (holder.itemViewType == HISTORY || holder.itemViewType == CURRENT) {
             setAlpha(holder, 0.5f)
         }

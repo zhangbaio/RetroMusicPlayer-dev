@@ -17,7 +17,7 @@
         android:paddingEnd="8dp"
         android:textAllCaps="false"
         android:textAppearance="@style/TextViewNormal"
-        android:textColor="#fff"
+        android:textColor="?android:attr/textColorPrimary"
         tools:ignore="RtlSymmetry,UnusedAttribute"
         tools:text="Storage"
         tools:textColor="#000" />

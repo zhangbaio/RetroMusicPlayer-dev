@@ -133,7 +133,7 @@ val ACCENT_COLORS = intArrayOf(
         parseColor("#00B0FF"), parseColor("#00E5FF"), parseColor("#1DE9B6"),
         parseColor("#00E676"), parseColor("#76FF03"), parseColor("#C6FF00"),
         parseColor("#FFEA00"), parseColor("#FFC400"), parseColor("#FF9100"),
-        parseColor("#FF3D00")
+        parseColor("#FF3D00"), parseColor("#FFFFFF")
 )
 
 val ACCENT_COLORS_SUB = arrayOf(
@@ -185,5 +185,8 @@ val ACCENT_COLORS_SUB = arrayOf(
 ), intArrayOf(
         parseColor("#FF9E80"), parseColor("#FF6E40"), parseColor("#FF3D00"),
         parseColor("#DD2C00")
+), intArrayOf(
+        parseColor("#FFFFFF"), parseColor("#FAFAFA"), parseColor("#F5F5F5"),
+        parseColor("#EEEEEE")
 )
 )

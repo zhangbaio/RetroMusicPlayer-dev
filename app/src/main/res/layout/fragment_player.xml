@@ -303,6 +303,7 @@
             android:id="@+id/actionCast"
             android:layout_width="80dp"
             android:layout_height="48dp"
+            app:mediaRouteButtonTint="@android:color/white"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/actionQueue"
             app:layout_constraintStart_toEndOf="@+id/actionLyrics"

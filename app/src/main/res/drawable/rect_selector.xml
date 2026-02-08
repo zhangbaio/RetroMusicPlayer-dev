@@ -18,7 +18,7 @@
     <item android:id="@android:id/mask">
         <shape>
             <corners android:radius="@dimen/m3_card_corner_radius" />
-            <solid android:color="@color/md_green_500" />
+            <solid android:color="@color/apple_music_accent" />
         </shape>
     </item>
     <item>

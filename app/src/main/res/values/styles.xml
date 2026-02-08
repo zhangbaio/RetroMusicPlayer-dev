@@ -198,6 +198,11 @@
     </style>
     <!--Bottom Sheet Dialog Style-->
     <style name="BottomSheetDialogStyle" parent="Theme.Design.BottomSheetDialog">
+        <item name="colorPrimary">@color/apple_music_accent</item>
+        <item name="colorAccent">@color/apple_music_accent</item>
+        <item name="android:colorAccent">@color/apple_music_accent</item>
+        <item name="colorControlActivated">@color/apple_music_accent</item>
+        <item name="colorControlHighlight">@color/apple_music_accent_variant</item>
         <item name="android:windowIsFloating">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowSoftInputMode">adjustResize|stateVisible</item>
@@ -217,12 +222,18 @@
     </style>
 
     <style name="CarTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="colorPrimaryDark">@color/md_deep_purple_700</item>
-        <item name="colorAccent">@color/md_deep_purple_A400</item>
-        <item name="colorPrimary">@color/md_deep_purple_500</item>
+        <item name="colorPrimaryDark">@color/apple_music_accent_variant</item>
+        <item name="colorAccent">@color/apple_music_accent</item>
+        <item name="colorPrimary">@color/apple_music_accent</item>
     </style>
 
     <style name="Theme.RetroMusic.Dialog" parent="Theme.Material3.DayNight.Dialog">
+        <item name="colorPrimary">@color/apple_music_accent</item>
+        <item name="colorSecondary">@color/apple_music_accent</item>
+        <item name="colorAccent">@color/apple_music_accent</item>
+        <item name="android:colorAccent">@color/apple_music_accent</item>
+        <item name="colorSurface">@color/apple_music_surface</item>
+        <item name="colorOnSurface">@color/apple_music_on_surface</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowIsFloating">true</item>
         <item name="android:windowIsTranslucent">true</item>

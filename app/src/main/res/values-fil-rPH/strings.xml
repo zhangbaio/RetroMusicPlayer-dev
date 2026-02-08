@@ -3,7 +3,7 @@
     <string name="about_album_label">Tungkol sa %s</string>
     <string name="about_settings_summary">Koponan, mga social link</string>
     <string name="accent_color">Kulay ng accent</string>
-    <string name="accent_color_desc">Ang kulay ng theme accent ay, naka-default sa purple</string>
+    <string name="accent_color_desc">Ang kulay ng theme accent ay, naka-default sa Apple Music red</string>
     <string name="action_about">Tungkol sa</string>
     <string name="action_add_to_blacklist">Idagdag sa Blacklist</string>
     <string name="action_add_to_favorites">Idagdag sa mga paborito</string>

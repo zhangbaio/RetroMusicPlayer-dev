@@ -50,7 +50,7 @@ class LicenseActivity : AbsThemeActivity() {
             // Inject color values for WebView body background and links
             val isDark = isWindowBackgroundDark(this)
             val backgroundColor = colorToCSS(
-                surfaceColor(Color.parseColor(if (isDark) "#424242" else "#ffffff"))
+                surfaceColor(Color.parseColor(if (isDark) "#000000" else "#ffffff"))
             )
             val contentColor = colorToCSS(Color.parseColor(if (isDark) "#ffffff" else "#000000"))
             val changeLog = buf.toString()

@@ -3,7 +3,7 @@
     <string name="about_album_label">O %s</string>
     <string name="about_settings_summary">Tim, društvene poveznice</string>
     <string name="accent_color">Accent color</string>
-    <string name="accent_color_desc">The theme accent color, defaults to purple</string>
+    <string name="accent_color_desc">The theme accent color, defaults to Apple Music red</string>
     <string name="action_about">Više informacija</string>
     <string name="action_add_to_blacklist">Add to Blacklist</string>
     <string name="action_add_to_favorites">Dodaj u favorite</string>

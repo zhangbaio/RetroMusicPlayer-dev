@@ -1,6 +1,7 @@
 package code.name.monkey.retromusic.fragments.player
 
 import android.content.SharedPreferences
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.FrameLayout
@@ -62,9 +63,9 @@ class CoverLyricsFragment : AbsMusicServiceFragment(R.layout.fragment_cover_lyri
     fun setColors(color: MediaNotificationProcessor) {
         binding.run {
             playerLyrics.background = null
-            playerLyricsLine1.setTextColor(color.primaryTextColor)
+            playerLyricsLine1.setTextColor(Color.WHITE)
             playerLyricsLine1.setShadowLayer(dipToPix(10f), 0f, 0f, color.backgroundColor)
-            playerLyricsLine2.setTextColor(color.primaryTextColor)
+            playerLyricsLine2.setTextColor(Color.WHITE)
             playerLyricsLine2.setShadowLayer(dipToPix(10f), 0f, 0f, color.backgroundColor)
         }
 

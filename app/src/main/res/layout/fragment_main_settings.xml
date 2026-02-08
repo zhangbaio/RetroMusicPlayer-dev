@@ -87,7 +87,7 @@
                     android:text="@string/buy_now"
                     android:textAllCaps="false"
                     android:textAppearance="@style/TextViewButton"
-                    android:textColor="?colorAccent"
+                    android:textColor="?attr/colorPrimary"
                     android:textStyle="bold"
                     app:backgroundTint="?attr/colorSurface"
                     app:layout_constraintBottom_toBottomOf="parent"
@@ -102,7 +102,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_palette"
-            app:settingListItemIconColor="@color/md_blue_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/general_settings_summary"
             app:settingListItemTitle="@string/general_settings_title" />
 
@@ -111,7 +111,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_play_circle_filled"
-            app:settingListItemIconColor="@color/md_red_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/now_playing_summary"
             app:settingListItemTitle="@string/now_playing" />
 
@@ -120,7 +120,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_volume_up"
-            app:settingListItemIconColor="@color/md_deep_purple_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/audio_settings_summary"
             app:settingListItemTitle="@string/pref_header_audio" />
 
@@ -129,7 +129,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_hdr_strong"
-            app:settingListItemIconColor="@color/md_teal_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/personalize_settings_summary"
             app:settingListItemTitle="@string/personalize" />
 
@@ -139,7 +139,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_image"
-            app:settingListItemIconColor="@color/md_deep_orange_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/image_settings_summary"
             app:settingListItemTitle="@string/pref_header_images" />
 
@@ -148,7 +148,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_testing"
-            app:settingListItemIconColor="@color/md_indigo_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/other_settings_summary"
             app:settingListItemTitle="@string/others" />
 
@@ -157,7 +157,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_restore"
-            app:settingListItemIconColor="@color/md_cyan_400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/backup_restore_settings_summary"
             app:settingListItemTitle="@string/backup_restore_title" />
 
@@ -166,7 +166,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_cloud"
-            app:settingListItemIconColor="@color/md_indigo_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="Manage WebDAV servers for cloud music"
             app:settingListItemTitle="WebDAV" />
 
@@ -175,7 +175,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_info_outline"
-            app:settingListItemIconColor="@color/md_light_green_A400"
+            app:settingListItemIconColor="@color/apple_music_accent"
             app:settingListItemText="@string/about_settings_summary"
             app:settingListItemTitle="@string/action_about" />
 

@@ -1,12 +1,25 @@
 <resources>
 
-    <style name="Theme.RetroMusic.MD3" parent="@style/Theme.Material3.DynamicColors.DayNight">
+    <style name="Theme.RetroMusic.MD3" parent="@style/Theme.Material3.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="roundSelector">@drawable/round_selector</item>
         <item name="rectSelector">@drawable/rect_selector</item>
         <item name="materialCardViewStyle">@style/Widget.Material3.CardView.Elevated</item>
         <item name="materialButtonStyle">@style/MaterialButtonTheme</item>
+        <item name="colorPrimary">@color/apple_music_accent</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorSecondary">@color/apple_music_accent</item>
+        <item name="colorOnSecondary">@android:color/white</item>
+        <item name="colorSurface">@color/apple_music_surface</item>
+        <item name="colorOnSurface">@color/apple_music_on_surface</item>
+        <item name="colorSurfaceVariant">@color/apple_music_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/apple_music_on_surface_variant</item>
+        <item name="android:colorBackground">@color/apple_music_surface</item>
+        <item name="colorOnBackground">@color/apple_music_on_surface</item>
+        <item name="colorOutline">@color/apple_music_outline</item>
+        <item name="android:textColorPrimary">@color/apple_music_on_surface</item>
+        <item name="android:textColorSecondary">@color/apple_music_on_surface_variant</item>
         <item name="popupMenuBackground">@drawable/popup_background</item>
         <item name="android:windowBackground">?attr/colorSurface</item>
         <item name="windowActionModeOverlay">true</item>
@@ -15,7 +28,7 @@
     <style name="Theme.RetroMusic.MD3.Black" parent="@style/Theme.RetroMusic.MD3" />
 
     <style name="Theme.AppWidget" parent="@android:style/Theme.DeviceDefault.DayNight">
-        <item name="colorSurface">@android:color/system_accent1_50</item>
+        <item name="colorSurface">@color/apple_music_surface_variant</item>
     </style>
 
     <style name="Theme.RetroMusic.SplashScreen" parent="Theme.SplashScreen">

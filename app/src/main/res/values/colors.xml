@@ -1,41 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <color name="window_color">@color/md_white_1000</color>
-    <color name="window_color_light">@color/md_white_1000</color>
-    <color name="window_color_dark">@android:color/black</color>
+    <color name="apple_music_accent">#FC3C44</color>
+    <color name="apple_music_accent_variant">#E0354B</color>
+    <color name="apple_music_surface_light">#FFFFFF</color>
+    <color name="apple_music_surface_variant_light">#F2F2F7</color>
+    <color name="apple_music_on_surface_light">#000000</color>
+    <color name="apple_music_on_surface_variant_light">#8A8A8E</color>
+    <color name="apple_music_outline_light">#C6C6C8</color>
+    <color name="apple_music_surface_dark">#000000</color>
+    <color name="apple_music_surface_variant_dark">#1C1C1E</color>
+    <color name="apple_music_on_surface_dark">#FFFFFF</color>
+    <color name="apple_music_on_surface_variant_dark">#8D8D93</color>
+    <color name="apple_music_outline_dark">#38383A</color>
+    <color name="apple_music_surface_black">#000000</color>
+
+    <color name="apple_music_surface">@color/apple_music_surface_light</color>
+    <color name="apple_music_surface_variant">@color/apple_music_surface_variant_light</color>
+    <color name="apple_music_on_surface">@color/apple_music_on_surface_light</color>
+    <color name="apple_music_on_surface_variant">@color/apple_music_on_surface_variant_light</color>
+    <color name="apple_music_outline">@color/apple_music_outline_light</color>
+
+    <color name="window_color">@color/apple_music_surface</color>
+    <color name="window_color_light">@color/apple_music_surface_light</color>
+    <color name="window_color_dark">@color/apple_music_surface_dark</color>
 
     <color name="twenty_percent_black_overlay">#34000000</color>
-    <color name="app_shortcut_default_foreground">#607d8b</color>
+    <color name="app_shortcut_default_foreground">#FC3C44</color>
     <color name="app_shortcut_default_background">#f5f5f5</color>
     <color name="md_indigo_A400">#3D5AFE</color>
-    <color name="dark_color">#202124</color>
-    <color name="black_color">#202124</color>
+    <color name="dark_color">@color/apple_music_surface_dark</color>
+    <color name="black_color">@color/apple_music_surface_black</color>
 
-    <color name="darkColorPrimary">#202124</color>
-    <color name="darkColorSurface">#202124</color>
+    <color name="darkColorPrimary">@color/apple_music_accent</color>
+    <color name="darkColorSurface">@color/apple_music_surface_dark</color>
 
-    <color name="darkerColorSurface">#353535</color>
-    <color name="lighterColorSurface">#dddddd</color>
+    <color name="darkerColorSurface">@color/apple_music_surface_variant_dark</color>
+    <color name="lighterColorSurface">@color/apple_music_surface_variant_light</color>
 
-    <color name="blackColorSurface">#000000</color>
+    <color name="blackColorSurface">@color/apple_music_surface_black</color>
 
     <color name="transparent">#00000000</color>
     <color name="semi_transparent">#20000000</color>
     <!-- card colors -->
-    <color name="card_background">#ffffff</color>
-    <color name="card_shadow_1">#d4d4d4</color>
-    <color name="card_shadow_2">#dddddd</color>
+    <color name="card_background">@color/apple_music_surface_variant_light</color>
+    <color name="card_shadow_1">#D1D1D6</color>
+    <color name="card_shadow_2">#E5E5EA</color>
 
     <color name="progress_gray">#FFD8D8D8</color>
-    <color name="default_blue_light">#ff33b5e5</color>
+    <color name="default_blue_light">#FFFC3C44</color>
 
-    <color name="bottomSheetColorLight">#FFFFFF</color>
-    <color name="bottomSheetColorDark">#202020</color>
-    <color name="bottomSheetColorBlack">#000000</color>
+    <color name="bottomSheetColorLight">@color/apple_music_surface_variant_light</color>
+    <color name="bottomSheetColorDark">@color/apple_music_surface_variant_dark</color>
+    <color name="bottomSheetColorBlack">@color/apple_music_surface_black</color>
 
-    <color name="bottomSheetColor">#FFFFFF</color>
+    <color name="bottomSheetColor">@color/apple_music_surface</color>
     <color name="widget_md3_bg_color">@color/lighterColorSurface</color>
-    <color name="widget_circle_button_color">@color/md_indigo_A400</color>
+    <color name="widget_circle_button_color">@color/apple_music_accent</color>
     <color name="widget_md3_button_bg_color">@color/lighterColorSurface</color>
 </resources>

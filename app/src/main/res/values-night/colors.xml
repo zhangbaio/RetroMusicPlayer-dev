@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <color name="window_color">@android:color/black</color>
+    <color name="apple_music_accent">#FC3C44</color>
+    <color name="apple_music_accent_variant">#FF4D58</color>
+    <color name="apple_music_surface">@color/apple_music_surface_dark</color>
+    <color name="apple_music_surface_variant">@color/apple_music_surface_variant_dark</color>
+    <color name="apple_music_on_surface">@color/apple_music_on_surface_dark</color>
+    <color name="apple_music_on_surface_variant">@color/apple_music_on_surface_variant_dark</color>
+    <color name="apple_music_outline">@color/apple_music_outline_dark</color>
 
-    <color name="bottomSheetColor">#202020</color>
+    <color name="window_color">@color/apple_music_surface_dark</color>
+
+    <color name="bottomSheetColor">@color/apple_music_surface_variant_dark</color>
     <color name="widget_md3_bg_color">@color/darkerColorSurface</color>
 </resources>
