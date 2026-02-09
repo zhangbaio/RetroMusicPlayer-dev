@@ -15,6 +15,7 @@
 package code.name.monkey.retromusic.repository
 
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import code.name.monkey.retromusic.db.WebDAVConfigEntity
@@ -83,10 +84,21 @@ class RealWebDAVRepository(
         val file: WebDAVFile,
         val trackNumber: Int,
         val existingSong: WebDAVSongEntity?,
+        val resolvedTitle: String,
+        val resolvedArtistName: String,
+        val resolvedAlbumName: String,
         val resolvedContentType: String,
         val remoteLastModified: Long,
         val resolvedAlbumArtPath: String?,
         val fileFingerprint: String
+    )
+
+    private data class DedupCandidate(
+        val path: String,
+        val title: String,
+        val artistName: String,
+        val fileSize: Long,
+        val remoteLastModified: Long
     )
 
     override suspend fun getAllConfigs(): List<WebDAVConfig> = withContext(Dispatchers.IO) {
@@ -338,8 +350,10 @@ class RealWebDAVRepository(
                 .filterKeys { it in selectedFolderSet }
                 .toMutableMap()
             val nextDirectorySummaries = previousDirectorySummaries.toMutableMap()
+            val dedupWinnersByKey = mutableMapOf<String, DedupCandidate>()
             var totalSyncedSongs = 0
             var totalDeletedByRemote = 0
+            var totalDeletedByDedup = 0
             var totalUnchangedSkipped = 0
             var totalQuickSkippedFolders = 0
             var completedFolders = 0
@@ -347,6 +361,36 @@ class RealWebDAVRepository(
                 remainingFiles = MAX_DURATION_PROBE_FILES_PER_SYNC,
                 remainingBytes = MAX_DURATION_PROBE_TOTAL_BYTES_PER_SYNC
             )
+            val staleDedupPathsBeforeScan = mutableSetOf<String>()
+            existingByPath.values.forEach { existing ->
+                val candidate = DedupCandidate(
+                    path = existing.remotePath,
+                    title = existing.title,
+                    artistName = existing.artistName,
+                    fileSize = existing.fileSize,
+                    remoteLastModified = existing.remoteLastModified
+                )
+                val dedupKey = buildDedupKey(
+                    title = candidate.title,
+                    artistName = candidate.artistName,
+                    path = candidate.path
+                )
+                val winner = dedupWinnersByKey[dedupKey]
+                if (winner == null || isDedupCandidateBetter(candidate, winner)) {
+                    if (winner != null && winner.path != candidate.path) {
+                        staleDedupPathsBeforeScan += winner.path
+                    }
+                    dedupWinnersByKey[dedupKey] = candidate
+                    staleDedupPathsBeforeScan.remove(candidate.path)
+                } else {
+                    staleDedupPathsBeforeScan += candidate.path
+                }
+            }
+            if (staleDedupPathsBeforeScan.isNotEmpty()) {
+                deleteSongsByPathsInBatches(configId, staleDedupPathsBeforeScan)
+                staleDedupPathsBeforeScan.forEach(existingByPath::remove)
+                totalDeletedByDedup += staleDedupPathsBeforeScan.size
+            }
 
             if (scanFolders.isNotEmpty()) {
                 onProgress?.invoke(
@@ -462,7 +506,9 @@ class RealWebDAVRepository(
                                 staleByRemoteDeletion.forEach(existingByPath::remove)
                                 totalDeletedByRemote += staleByRemoteDeletion.size
 
+                                val metadataParser = WebDAVMetadataParser(scannedFiles)
                                 val pendingUpserts = mutableListOf<PendingSongUpsert>()
+                                val staleDedupPaths = mutableSetOf<String>()
                                 scannedFiles.forEachIndexed { index, file ->
                                     val existingSong = existingByPath[file.path]
                                     val parentPath = parentFolderPath(file.path)
@@ -477,23 +523,79 @@ class RealWebDAVRepository(
                                         remoteLastModified = remoteLastModified,
                                         contentType = resolvedContentType
                                     )
+                                    val parsedMetadata = metadataParser.parse(file)
+                                    val resolvedTitle = resolveTitle(existingSong?.title, parsedMetadata.title)
+                                    val resolvedArtistName = resolveArtistName(
+                                        existingSong?.artistName,
+                                        parsedMetadata.artistName
+                                    )
+                                    val resolvedAlbumName = resolveAlbumName(
+                                        existingSong?.albumName,
+                                        parsedMetadata.albumName
+                                    )
+                                    val dedupCandidate = DedupCandidate(
+                                        path = file.path,
+                                        title = resolvedTitle,
+                                        artistName = resolvedArtistName,
+                                        fileSize = file.size,
+                                        remoteLastModified = remoteLastModified
+                                    )
+                                    val dedupKey = buildDedupKey(
+                                        title = dedupCandidate.title,
+                                        artistName = dedupCandidate.artistName,
+                                        path = dedupCandidate.path
+                                    )
+                                    val winner = dedupWinnersByKey[dedupKey]
+                                    val shouldKeepCandidate = when {
+                                        winner == null -> true
+                                        // Same path means it is the same record, must never be treated as duplicate loser.
+                                        winner.path == dedupCandidate.path -> true
+                                        else -> isDedupCandidateBetter(dedupCandidate, winner)
+                                    }
+                                    if (!shouldKeepCandidate) {
+                                        if (existingSong != null && winner?.path != file.path) {
+                                            staleDedupPaths += file.path
+                                        }
+                                        return@forEachIndexed
+                                    }
+                                    if (winner != null && winner.path != file.path) {
+                                        staleDedupPaths += winner.path
+                                    }
+                                    dedupWinnersByKey[dedupKey] = dedupCandidate
+                                    staleDedupPaths.remove(file.path)
                                     if (existingSong != null && parentPath in unchangedDirectories) {
                                         totalUnchangedSkipped += 1
                                         return@forEachIndexed
                                     }
                                     if (isFileUnchanged(existingSong, fileFingerprint, resolvedAlbumArtPath)) {
-                                        totalUnchangedSkipped += 1
-                                        return@forEachIndexed
+                                        if (!shouldForceMetadataUpsert(
+                                                existingSong = existingSong,
+                                                resolvedTitle = resolvedTitle,
+                                                resolvedArtistName = resolvedArtistName,
+                                                resolvedAlbumName = resolvedAlbumName
+                                            )
+                                        ) {
+                                            totalUnchangedSkipped += 1
+                                            return@forEachIndexed
+                                        }
                                     }
                                     pendingUpserts += PendingSongUpsert(
                                         file = file,
                                         trackNumber = index + 1,
                                         existingSong = existingSong,
+                                        resolvedTitle = resolvedTitle,
+                                        resolvedArtistName = resolvedArtistName,
+                                        resolvedAlbumName = resolvedAlbumName,
                                         resolvedContentType = resolvedContentType,
                                         remoteLastModified = remoteLastModified,
                                         resolvedAlbumArtPath = resolvedAlbumArtPath,
                                         fileFingerprint = fileFingerprint
                                     )
+                                }
+                                if (staleDedupPaths.isNotEmpty()) {
+                                    deleteSongsByPathsInBatches(configId, staleDedupPaths)
+                                    staleDedupPaths.forEach(existingByPath::remove)
+                                    totalDeletedByDedup += staleDedupPaths.size
                                 }
 
                                 if (pendingUpserts.isEmpty()) {
@@ -520,9 +622,7 @@ class RealWebDAVRepository(
                                     return@onSuccess
                                 }
 
-                                val metadataParser = WebDAVMetadataParser(scannedFiles)
                                 val songEntities = pendingUpserts.map { pending ->
-                                    val parsedMetadata = metadataParser.parse(pending.file)
                                     val duration = resolveDurationMillis(
                                         file = pending.file,
                                         config = decryptedConfig,
@@ -533,12 +633,9 @@ class RealWebDAVRepository(
                                         id = pending.existingSong?.id ?: 0L,
                                         configId = configId,
                                         remotePath = pending.file.path,
-                                        title = resolveTitle(pending.existingSong?.title, parsedMetadata.title),
-                                        artistName = resolveArtistName(
-                                            pending.existingSong?.artistName,
-                                            parsedMetadata.artistName
-                                        ),
-                                        albumName = pending.existingSong?.albumName ?: "Unknown Album",
+                                        title = pending.resolvedTitle,
+                                        artistName = pending.resolvedArtistName,
+                                        albumName = pending.resolvedAlbumName,
                                         duration = duration,
                                         albumArtPath = pending.resolvedAlbumArtPath,
                                         trackNumber = pending.trackNumber,
@@ -602,6 +699,8 @@ class RealWebDAVRepository(
                 )
                 return@withContext Result.failure(Exception("Sync failed, unable to scan selected folders"))
             }
+            val removedByFinalDedup = pruneDuplicateSongsKeepLargest(configId)
+            totalDeletedByDedup += removedByFinalDedup
 
             // Update last sync time
             val updatedConfig = config.copy(lastSynced = System.currentTimeMillis())
@@ -642,7 +741,7 @@ class RealWebDAVRepository(
             }
             Log.d(
                 TAG,
-                "Sync completed: upserted=$totalSyncedSongs, unchangedSkipped=$totalUnchangedSkipped, quickSkippedFolders=$totalQuickSkippedFolders, deletedBySelection=${staleByFolderSelection.size}, deletedByRemote=$totalDeletedByRemote, total=$totalCount"
+                "Sync completed: upserted=$totalSyncedSongs, unchangedSkipped=$totalUnchangedSkipped, quickSkippedFolders=$totalQuickSkippedFolders, deletedBySelection=${staleByFolderSelection.size}, deletedByRemote=$totalDeletedByRemote, deletedByDedup=$totalDeletedByDedup, total=$totalCount"
             )
             Result.success(totalSyncedSongs)
         } catch (e: Exception) {
@@ -793,6 +892,52 @@ class RealWebDAVRepository(
                 append(((byte.toInt() ushr 4) and 0x0f).toString(16))
                 append((byte.toInt() and 0x0f).toString(16))
             }
+        }
+    }
+
+    private suspend fun pruneDuplicateSongsKeepLargest(configId: Long): Int {
+        val allSongs = webDAVDao.getSongsByConfig(configId)
+        if (allSongs.size < 2) {
+            return 0
+        }
+        val grouped = linkedMapOf<String, MutableList<WebDAVSongEntity>>()
+        allSongs.forEach { song ->
+            val dedupKey = buildDedupKey(
+                title = song.title,
+                artistName = song.artistName,
+                path = song.remotePath
+            )
+            grouped.getOrPut(dedupKey) { mutableListOf() }.add(song)
+        }
+        val loserIds = mutableListOf<Long>()
+        grouped.values.forEach { songs ->
+            if (songs.size <= 1) {
+                return@forEach
+            }
+            val winner = songs.maxWithOrNull(::compareDedupEntityForWinner) ?: return@forEach
+            songs.forEach { entity ->
+                if (entity.id != winner.id) {
+                    loserIds += entity.id
+                }
+            }
+        }
+        if (loserIds.isEmpty()) {
+            return 0
+        }
+        webDAVDao.deleteSongsByIds(loserIds)
+        return loserIds.size
+    }
+
+    private fun compareDedupEntityForWinner(
+        first: WebDAVSongEntity,
+        second: WebDAVSongEntity
+    ): Int {
+        return when {
+            first.fileSize != second.fileSize ->
+                first.fileSize.compareTo(second.fileSize)
+            first.remoteLastModified != second.remoteLastModified ->
+                first.remoteLastModified.compareTo(second.remoteLastModified)
+            else -> second.remotePath.compareTo(first.remotePath)
         }
     }
 
@@ -956,9 +1101,61 @@ class RealWebDAVRepository(
         return if (existing.isNotEmpty() && !isUnknownArtist(existing)) existing else ""
     }
 
+    private fun resolveAlbumName(existingAlbum: String?, parsedAlbum: String): String {
+        val parsed = parsedAlbum.trim()
+        if (parsed.isNotEmpty() && !isUnknownAlbum(parsed)) {
+            return parsed
+        }
+        val existing = existingAlbum?.trim().orEmpty()
+        return if (existing.isNotEmpty() && !isUnknownAlbum(existing)) {
+            existing
+        } else {
+            "Unknown Album"
+        }
+    }
+
+    private fun shouldForceMetadataUpsert(
+        existingSong: WebDAVSongEntity?,
+        resolvedTitle: String,
+        resolvedArtistName: String,
+        resolvedAlbumName: String
+    ): Boolean {
+        if (existingSong == null) return false
+
+        val existingTitle = existingSong.title.trim()
+        if (existingTitle.isBlank() && resolvedTitle.trim().isNotBlank()) {
+            return true
+        }
+
+        val existingArtist = existingSong.artistName.trim()
+        if ((existingArtist.isBlank() || isUnknownArtist(existingArtist)) &&
+            resolvedArtistName.trim().isNotBlank()
+        ) {
+            return true
+        }
+
+        val existingAlbum = existingSong.albumName.trim()
+        if ((existingAlbum.isBlank() || isUnknownAlbum(existingAlbum)) &&
+            resolvedAlbumName.trim().isNotBlank() &&
+            !isUnknownAlbum(resolvedAlbumName)
+        ) {
+            return true
+        }
+
+        return false
+    }
+
     private fun isUnknownArtist(value: String): Boolean {
         val normalized = value.trim().lowercase()
         return normalized == Artist.UNKNOWN_ARTIST_DISPLAY_NAME.lowercase() ||
+            normalized == "unknown" ||
+            normalized == "<unknown>"
+    }
+
+    private fun isUnknownAlbum(value: String): Boolean {
+        val normalized = value.trim().lowercase()
+        return normalized.isEmpty() ||
+            normalized == "unknown album" ||
             normalized == "unknown" ||
             normalized == "<unknown>"
     }
@@ -1027,6 +1224,43 @@ class RealWebDAVRepository(
         val trimmed = path.trim().trimEnd('/')
         val parent = trimmed.substringBeforeLast('/', "")
         return if (parent.isBlank()) "/" else parent
+    }
+
+    private fun buildDedupKey(title: String, artistName: String, path: String): String {
+        val normalizedTitle = normalizeDedupToken(title).ifBlank {
+            normalizeDedupToken(fileNameWithoutExtension(path))
+        }.ifBlank {
+            normalizeDedupToken(path)
+        }
+        val normalizedArtist = normalizeDedupToken(artistName).ifBlank {
+            normalizeDedupToken(parentFolderPath(path).substringAfterLast('/'))
+        }.ifBlank {
+            "~"
+        }
+        return "$normalizedTitle|$normalizedArtist"
+    }
+
+    private fun normalizeDedupToken(value: String): String {
+        return value.trim()
+            .replace('+', ' ')
+            .replace('_', ' ')
+            .replace(Regex("\\s+"), " ")
+            .lowercase()
+    }
+
+    private fun fileNameWithoutExtension(path: String): String {
+        val cleanPath = path.substringBefore('?').substringBefore('#')
+        val decodedFileName = Uri.decode(cleanPath.substringAfterLast('/').substringAfterLast('\\'))
+        return decodedFileName.substringBeforeLast('.', decodedFileName)
+    }
+
+    private fun isDedupCandidateBetter(candidate: DedupCandidate, winner: DedupCandidate): Boolean {
+        return when {
+            candidate.fileSize != winner.fileSize -> candidate.fileSize > winner.fileSize
+            candidate.remoteLastModified != winner.remoteLastModified ->
+                candidate.remoteLastModified > winner.remoteLastModified
+            else -> candidate.path < winner.path
+        }
     }
 
     private fun normalizeFolderPath(path: String): String {

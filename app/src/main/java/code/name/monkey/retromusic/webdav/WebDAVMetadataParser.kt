@@ -8,6 +8,7 @@ class WebDAVMetadataParser(audioFiles: List<WebDAVFile>) {
     data class ParsedMetadata(
         val title: String,
         val artistName: String,
+        val albumName: String,
     )
 
     private enum class DirectoryPattern {
@@ -30,6 +31,9 @@ class WebDAVMetadataParser(audioFiles: List<WebDAVFile>) {
         val segments = splitSegments(baseName)
         val folderArtistCandidates = folderArtistCandidates(file.path)
 
+        var resolvedTitle = fallbackTitle
+        var resolvedArtist = ""
+
         if (segments.size == 2) {
             val first = segments[0]
             val second = segments[1]
@@ -40,40 +44,78 @@ class WebDAVMetadataParser(audioFiles: List<WebDAVFile>) {
             val secondMatchedFolder = secondNormalized.isNotEmpty() && secondNormalized in folderKeys
 
             if (firstMatchedFolder.xor(secondMatchedFolder)) {
-                return if (firstMatchedFolder) {
-                    ParsedMetadata(title = second, artistName = first)
+                if (firstMatchedFolder) {
+                    resolvedTitle = second
+                    resolvedArtist = first
                 } else {
-                    ParsedMetadata(title = first, artistName = second)
+                    resolvedTitle = first
+                    resolvedArtist = second
                 }
+                val album = resolveAlbumName(file.path, resolvedArtist)
+                return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
             }
 
             when (directoryPatterns[parentFolderPath(file.path)]) {
-                DirectoryPattern.ARTIST_FIRST -> return ParsedMetadata(
-                    title = second,
-                    artistName = first
-                )
+                DirectoryPattern.ARTIST_FIRST -> {
+                    resolvedTitle = second
+                    resolvedArtist = first
+                    val album = resolveAlbumName(file.path, resolvedArtist)
+                    return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
+                }
 
-                DirectoryPattern.ARTIST_LAST -> return ParsedMetadata(
-                    title = first,
-                    artistName = second
-                )
+                DirectoryPattern.ARTIST_LAST -> {
+                    resolvedTitle = first
+                    resolvedArtist = second
+                    val album = resolveAlbumName(file.path, resolvedArtist)
+                    return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
+                }
 
                 null -> Unit
             }
 
             when (inferArtistByTokenFrequency(file.path, first, second)) {
-                first -> return ParsedMetadata(title = second, artistName = first)
-                second -> return ParsedMetadata(title = first, artistName = second)
+                first -> {
+                    resolvedTitle = second
+                    resolvedArtist = first
+                    val album = resolveAlbumName(file.path, resolvedArtist)
+                    return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
+                }
+                second -> {
+                    resolvedTitle = first
+                    resolvedArtist = second
+                    val album = resolveAlbumName(file.path, resolvedArtist)
+                    return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
+                }
+                null -> Unit
+            }
+
+            when (inferArtistByFolderAlbumPattern(file.path, first, second)) {
+                first -> {
+                    resolvedTitle = second
+                    resolvedArtist = first
+                    val album = resolveAlbumName(file.path, resolvedArtist)
+                    return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
+                }
+                second -> {
+                    resolvedTitle = first
+                    resolvedArtist = second
+                    val album = resolveAlbumName(file.path, resolvedArtist)
+                    return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
+                }
                 null -> Unit
             }
         }
 
         val folderArtist = folderArtistCandidates.firstOrNull()
         if (!folderArtist.isNullOrBlank()) {
-            return ParsedMetadata(title = fallbackTitle, artistName = folderArtist)
+            resolvedTitle = fallbackTitle
+            resolvedArtist = folderArtist
+            val album = resolveAlbumName(file.path, resolvedArtist)
+            return ParsedMetadata(title = resolvedTitle, artistName = resolvedArtist, albumName = album)
         }
 
-        return ParsedMetadata(title = fallbackTitle, artistName = "")
+        val fallbackAlbum = resolveAlbumName(file.path, artistName = "")
+        return ParsedMetadata(title = fallbackTitle, artistName = "", albumName = fallbackAlbum)
     }
 
     private fun buildDirectoryPatterns(audioFiles: List<WebDAVFile>): Map<String, DirectoryPattern> {
@@ -154,6 +196,26 @@ class WebDAVMetadataParser(audioFiles: List<WebDAVFile>) {
         }
     }
 
+    private fun inferArtistByFolderAlbumPattern(path: String, first: String, second: String): String? {
+        val firstKey = normalize(first)
+        val secondKey = normalize(second)
+        if (firstKey.isBlank() || secondKey.isBlank()) return null
+
+        folderAlbumCandidates(path).forEach { candidate ->
+            val segments = splitSegments(candidate)
+            if (segments.size != 2) return@forEach
+            val left = normalize(segments[0])
+            val right = normalize(segments[1])
+            if (firstKey == left || firstKey == right) {
+                return first
+            }
+            if (secondKey == left || secondKey == right) {
+                return second
+            }
+        }
+        return null
+    }
+
     private fun splitSegments(fileBaseName: String): List<String> {
         return fileBaseName
             .split(SEGMENT_SEPARATOR_REGEX)
@@ -168,6 +230,42 @@ class WebDAVMetadataParser(audioFiles: List<WebDAVFile>) {
             .map(::cleanSegment)
             .filter(::looksLikeArtistCandidate)
             .distinct()
+    }
+
+    private fun folderAlbumCandidates(path: String): List<String> {
+        val parent = folderName(parentFolderPath(path))
+        val grandParent = folderName(parentFolderPath(parentFolderPath(path)))
+        return listOf(parent, grandParent)
+            .map(::cleanSegment)
+            .filter(::looksLikeAlbumCandidate)
+            .distinct()
+    }
+
+    private fun resolveAlbumName(path: String, artistName: String): String {
+        val normalizedArtist = normalize(artistName)
+        val candidates = folderAlbumCandidates(path)
+        candidates.forEach { candidate ->
+            val segments = splitSegments(candidate)
+            if (segments.size == 2) {
+                val first = segments[0]
+                val second = segments[1]
+                val firstNormalized = normalize(first)
+                val secondNormalized = normalize(second)
+                if (normalizedArtist.isNotBlank()) {
+                    if (firstNormalized == normalizedArtist && looksLikeAlbumCandidate(second)) {
+                        return second
+                    }
+                    if (secondNormalized == normalizedArtist && looksLikeAlbumCandidate(first)) {
+                        return first
+                    }
+                }
+            }
+            if (normalizedArtist.isNotBlank() && normalize(candidate) == normalizedArtist) {
+                return@forEach
+            }
+            return candidate
+        }
+        return ""
     }
 
     private fun folderName(path: String): String {
@@ -190,11 +288,24 @@ class WebDAVMetadataParser(audioFiles: List<WebDAVFile>) {
         if (value.isBlank()) return false
         val normalized = normalize(value)
         if (normalized.isBlank()) return false
+        if (splitSegments(value).size >= 2) return false
         if (normalized in GENERIC_FOLDER_NAMES) return false
         if (normalized.matches(NUMERIC_ONLY_REGEX)) return false
         if (normalized.matches(YEAR_ONLY_REGEX)) return false
         if (normalized.matches(DISC_FOLDER_REGEX)) return false
         if (normalized.length > 48) return false
+        return true
+    }
+
+    private fun looksLikeAlbumCandidate(value: String): Boolean {
+        if (value.isBlank()) return false
+        val normalized = normalize(value)
+        if (normalized.isBlank()) return false
+        if (normalized in GENERIC_FOLDER_NAMES) return false
+        if (normalized.matches(NUMERIC_ONLY_REGEX)) return false
+        if (normalized.matches(YEAR_ONLY_REGEX)) return false
+        if (normalized.matches(DISC_FOLDER_REGEX)) return false
+        if (normalized.length > 80) return false
         return true
     }
 
