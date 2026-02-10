@@ -24,7 +24,9 @@ import code.name.monkey.retromusic.model.lyrics.Lyrics
 import code.name.monkey.retromusic.util.LyricUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
-import code.name.monkey.retromusic.webdav.WebDAVLyricUtil
+import code.name.monkey.retromusic.model.SourceType
+import code.name.monkey.retromusic.repository.ServerRepository
+import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.jaudiotagger.audio.exceptions.CannotReadException
@@ -108,10 +110,11 @@ class CoverLyricsFragment : AbsMusicServiceFragment(R.layout.fragment_cover_lyri
                 val lyricsText = data.ifEmpty {
                     LyricUtil.getEmbeddedSyncedLyrics(song.data)
                 }
-                if (lyricsText.isNullOrEmpty() && WebDAVLyricUtil.isWebDAVSong(song)) {
-                    val webdavLyrics = WebDAVLyricUtil.getSyncedLyrics(song)
-                    if (webdavLyrics != null) {
-                        Lyrics.parse(song, webdavLyrics)
+                if (lyricsText.isNullOrEmpty() &&
+                    (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV)) {
+                    val serverLyrics = loadServerLyrics(song)
+                    if (serverLyrics != null) {
+                        Lyrics.parse(song, serverLyrics)
                     } else {
                         null
                     }
@@ -123,6 +126,23 @@ class CoverLyricsFragment : AbsMusicServiceFragment(R.layout.fragment_cover_lyri
             } catch (e: CannotReadException) {
                 null
             }
+        }
+    }
+
+    private fun loadServerLyrics(song: code.name.monkey.retromusic.model.Song): String? {
+        return try {
+            val configId = song.webDavConfigId ?: return null
+            val trackIdStr = song.remotePath
+                ?.let { Regex("/api/v1/tracks/(\\d+)/stream").find(it) }
+                ?.groupValues?.getOrNull(1)
+            val serverTrackId = trackIdStr?.toLongOrNull() ?: return null
+            val serverRepository = GlobalContext.get().get<ServerRepository>()
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                serverRepository.getLyrics(serverTrackId, configId)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 

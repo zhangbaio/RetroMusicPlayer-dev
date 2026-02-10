@@ -15,12 +15,15 @@
 package code.name.monkey.retromusic.model
 
 /**
- * Represents the source type of a song (local or WebDAV)
+ * Represents the source type of a song.
  */
 enum class SourceType {
     /** Local music file from device storage */
     LOCAL,
 
-    /** Music file streamed from a WebDAV server */
-    WEBDAV
+    /** @deprecated Kept for database migration compatibility. Use SERVER instead. */
+    WEBDAV,
+
+    /** Music file streamed from a music server API */
+    SERVER
 }

@@ -172,19 +172,25 @@ fun Song.toPlayCount(): PlayCountEntity {
 }
 
 private fun resolveSourceType(rawValue: String, data: String): SourceType {
-    return runCatching { SourceType.valueOf(rawValue) }.getOrNull()
-        ?: if (data.startsWith("http://") || data.startsWith("https://")) {
-            SourceType.WEBDAV
-        } else {
-            SourceType.LOCAL
-        }
+    val parsed = runCatching { SourceType.valueOf(rawValue) }.getOrNull()
+    if (parsed != null) {
+        // Map legacy WEBDAV to SERVER
+        return if (parsed == SourceType.WEBDAV) SourceType.SERVER else parsed
+    }
+    return if (data.startsWith("http://") || data.startsWith("https://")) {
+        SourceType.SERVER
+    } else {
+        SourceType.LOCAL
+    }
 }
 
 private fun resolveRemotePath(sourceType: SourceType, remotePath: String?, data: String): String? {
     if (!remotePath.isNullOrBlank()) {
         return remotePath
     }
-    return if (sourceType == SourceType.WEBDAV && (data.startsWith("http://") || data.startsWith("https://"))) {
+    return if ((sourceType == SourceType.SERVER || sourceType == SourceType.WEBDAV)
+        && (data.startsWith("http://") || data.startsWith("https://"))
+    ) {
         data
     } else {
         null

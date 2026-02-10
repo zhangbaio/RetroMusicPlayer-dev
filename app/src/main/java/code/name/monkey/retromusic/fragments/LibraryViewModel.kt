@@ -96,7 +96,7 @@ class LibraryViewModel(
     private suspend fun fetchSongs() {
         val allSongs = repository.allSongs()
         val visibleSongs = if (PreferenceUtil.isLocalSongsBootstrapRunning) {
-            allSongs.filter { it.sourceType == SourceType.WEBDAV }
+            allSongs.filter { it.sourceType == SourceType.SERVER || it.sourceType == SourceType.WEBDAV }
         } else {
             allSongs
         }
@@ -269,8 +269,8 @@ class LibraryViewModel(
 
     private suspend fun fetchPlayCountSongs() {
         repository.playCountSongs().forEach { song ->
-            val isLocalSong = song.sourceType != SourceType.WEBDAV.name
-            if (isLocalSong && (!File(song.data).exists() || song.id == -1L)) {
+            val isRemoteSong = song.sourceType == SourceType.SERVER.name || song.sourceType == SourceType.WEBDAV.name
+            if (!isRemoteSong && (!File(song.data).exists() || song.id == -1L)) {
                 repository.deleteSongInPlayCount(song)
             }
         }
@@ -308,8 +308,8 @@ class LibraryViewModel(
     fun observableHistorySongs(): LiveData<List<Song>> {
         viewModelScope.launch(IO) {
             repository.historySong().forEach { song ->
-                val isLocalSong = song.sourceType != SourceType.WEBDAV.name
-                if (isLocalSong && (!File(song.data).exists() || song.id == -1L)) {
+                val isRemoteSong = song.sourceType == SourceType.SERVER.name || song.sourceType == SourceType.WEBDAV.name
+                if (!isRemoteSong && (!File(song.data).exists() || song.id == -1L)) {
                     repository.deleteSongInHistory(song.id)
                 }
             }

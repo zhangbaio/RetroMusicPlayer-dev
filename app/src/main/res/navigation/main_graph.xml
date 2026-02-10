@@ -111,7 +111,7 @@
         tools:layout="@layout/fragment_main_recycler">
         <argument
             android:name="song_source_filter"
-            android:defaultValue="WEBDAV"
+            android:defaultValue="SERVER"
             app:argType="string" />
     </fragment>
 
@@ -154,8 +154,8 @@
         android:name="code.name.monkey.retromusic.fragments.lyrics.LyricsFragment" />
 
     <fragment
-        android:id="@+id/webdav_settings_fragment"
-        android:name="code.name.monkey.retromusic.fragments.settings.WebDAVSettingsFragment"
-        android:label="WebDAV Settings"
-        tools:layout="@layout/fragment_webdav_settings" />
+        android:id="@+id/server_settings_fragment"
+        android:name="code.name.monkey.retromusic.fragments.settings.ServerSettingsFragment"
+        android:label="Server Settings"
+        tools:layout="@layout/fragment_server_settings" />
 </navigation>

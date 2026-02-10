@@ -619,4 +619,31 @@
     <string name="webdav_config_deleted">Configuration deleted</string>
     <string name="webdav_fill_all_fields">Please fill all fields</string>
 
+    <!-- Server settings -->
+    <string name="server_settings_title">Music Server</string>
+    <string name="server_settings_summary">Manage music servers for cloud playback</string>
+    <string name="server_name">Server Name</string>
+    <string name="server_name_hint">My Music Server</string>
+    <string name="server_url">Server URL</string>
+    <string name="server_url_hint">https://music.example.com</string>
+    <string name="server_api_token">API Token</string>
+    <string name="server_api_token_hint">Enter your API token</string>
+    <string name="server_test_connection">Test Connection</string>
+    <string name="server_testing_connection">Testing connection…</string>
+    <string name="server_add">Add Music Server</string>
+    <string name="server_edit">Edit Music Server</string>
+    <string name="server_delete">Delete Server</string>
+    <string name="server_delete_confirmation">Are you sure you want to delete \'%1$s\'?</string>
+    <string name="server_sync">Sync Songs</string>
+    <string name="server_scan">Scan Library</string>
+    <string name="server_syncing">Syncing…</string>
+    <string name="server_sync_complete">Synced %1$d songs</string>
+    <string name="server_scan_triggered">Library scan started</string>
+    <string name="server_config_saved">Configuration saved</string>
+    <string name="server_config_deleted">Configuration deleted</string>
+    <string name="server_fill_required_fields">Please fill all required fields</string>
+    <string name="server_songs">Server Songs</string>
+    <string name="no_server_songs">No server songs found.\nSync your music servers to see songs here.</string>
+    <string name="action_save">Save</string>
+
 </resources>

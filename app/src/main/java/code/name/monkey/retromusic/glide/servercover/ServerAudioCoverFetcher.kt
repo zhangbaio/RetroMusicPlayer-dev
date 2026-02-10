@@ -1,15 +1,12 @@
-package code.name.monkey.retromusic.glide.webdavcover
+package code.name.monkey.retromusic.glide.servercover
 
-import code.name.monkey.retromusic.repository.WebDAVRepository
-import code.name.monkey.retromusic.webdav.WebDAVCryptoUtil
+import code.name.monkey.retromusic.repository.ServerRepository
 import com.bumptech.glide.Priority
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.data.DataFetcher
 import kotlinx.coroutines.runBlocking
-import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import okhttp3.ResponseBody
 import org.koin.java.KoinJavaComponent
 import java.io.FileNotFoundException
@@ -17,8 +14,12 @@ import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
-class WebDAVAudioCoverFetcher(
-    private val model: WebDAVAudioCover
+/**
+ * Glide DataFetcher that loads cover art from the music server API
+ * using Bearer Token authentication.
+ */
+class ServerAudioCoverFetcher(
+    private val model: ServerAudioCover
 ) : DataFetcher<InputStream> {
 
     companion object {
@@ -36,43 +37,30 @@ class WebDAVAudioCoverFetcher(
 
     override fun loadData(priority: Priority, callback: DataFetcher.DataCallback<in InputStream>) {
         runCatching {
-            val repository: WebDAVRepository = KoinJavaComponent.get(WebDAVRepository::class.java)
+            val repository: ServerRepository = KoinJavaComponent.get(ServerRepository::class.java)
             val config = runBlocking { repository.getConfigById(model.configId) }
-                ?: throw FileNotFoundException("WebDAV config not found: ${model.configId}")
-            val password = WebDAVCryptoUtil.decryptPassword(config.password, config.id)
-            val authHeader = Credentials.basic(config.username, password)
+                ?: throw FileNotFoundException("Server config not found: ${model.configId}")
 
-            fetchFirstAvailableCover(model.coverUrls, authHeader)
-                ?: throw FileNotFoundException("No available cover in ${model.coverUrls}")
+            val request = Request.Builder()
+                .url(model.coverUrl)
+                .header("Authorization", "Bearer ${config.apiToken}")
+                .build()
+
+            val response = httpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                response.close()
+                throw FileNotFoundException("Cover art not found at ${model.coverUrl}, status=${response.code}")
+            }
+
+            val body = response.body
+            responseBody = body
+            body.byteStream()
         }.onSuccess { inputStream ->
             stream = inputStream
             callback.onDataReady(inputStream)
         }.onFailure { error ->
             callback.onLoadFailed(error as? Exception ?: Exception(error))
         }
-    }
-
-    private fun fetchFirstAvailableCover(urls: List<String>, authHeader: String): InputStream? {
-        for (url in urls) {
-            var response: Response? = null
-            try {
-                val request = Request.Builder()
-                    .url(url)
-                    .header("Authorization", authHeader)
-                    .build()
-                response = httpClient.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    response.close()
-                    continue
-                }
-                val body = response.body
-                responseBody = body
-                return body.byteStream()
-            } catch (_: Exception) {
-                response?.close()
-            }
-        }
-        return null
     }
 
     override fun cleanup() {

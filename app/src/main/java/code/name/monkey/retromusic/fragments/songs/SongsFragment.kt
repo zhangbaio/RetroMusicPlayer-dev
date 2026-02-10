@@ -45,20 +45,20 @@ class SongsFragment : AbsRecyclerViewCustomGridSizeFragment<SongAdapter, GridLay
     }
 
     override val titleRes: Int
-        get() = if (sourceFilter == SourceType.WEBDAV) R.string.web else R.string.songs
+        get() = if (sourceFilter == SourceType.SERVER) R.string.web else R.string.songs
 
     override val emptyMessage: Int
-        get() = if (sourceFilter == SourceType.WEBDAV) R.string.no_webdav_songs else R.string.no_songs
+        get() = if (sourceFilter == SourceType.SERVER) R.string.no_server_songs else R.string.no_songs
 
     override val emptyDescriptionMessage: Int
-        get() = if (sourceFilter == SourceType.WEBDAV) {
-            R.string.empty_state_description_webdav
+        get() = if (sourceFilter == SourceType.SERVER) {
+            R.string.no_server_songs
         } else {
             R.string.empty_state_description_local_songs
         }
 
     override val emptyIcon: Int
-        get() = if (sourceFilter == SourceType.WEBDAV) R.drawable.ic_cloud else R.drawable.ic_music_note_off
+        get() = if (sourceFilter == SourceType.SERVER) R.drawable.ic_cloud else R.drawable.ic_music_note_off
 
     override val isShuffleVisible: Boolean
         get() = true
@@ -345,8 +345,9 @@ class SongsFragment : AbsRecyclerViewCustomGridSizeFragment<SongAdapter, GridLay
     }
 
     private fun resolveSourceFilter(filter: String?): SourceType {
-        return if (filter.equals(SourceType.WEBDAV.name, ignoreCase = true)) {
-            SourceType.WEBDAV
+        return if (filter.equals(SourceType.SERVER.name, ignoreCase = true)
+            || filter.equals("WEBDAV", ignoreCase = true)) {
+            SourceType.SERVER
         } else {
             SourceType.LOCAL
         }
@@ -354,7 +355,7 @@ class SongsFragment : AbsRecyclerViewCustomGridSizeFragment<SongAdapter, GridLay
 
     private fun filterSongs(songs: List<Song>): List<Song> {
         val filtered = songs.filter { it.sourceType == sourceFilter }
-        if (sourceFilter != SourceType.WEBDAV) {
+        if (sourceFilter != SourceType.SERVER) {
             return filtered
         }
         return sortSongs(filtered)

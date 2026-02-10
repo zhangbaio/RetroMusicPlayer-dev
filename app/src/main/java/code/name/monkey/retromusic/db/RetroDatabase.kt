@@ -23,15 +23,15 @@ import androidx.room.RoomDatabase
         SongEntity::class,
         HistoryEntity::class,
         PlayCountEntity::class,
-        WebDAVConfigEntity::class,
-        WebDAVSongEntity::class
+        ServerConfigEntity::class,
+        ServerSongEntity::class
     ],
-    version = 29,
+    version = 30,
     exportSchema = false
 )
 abstract class RetroDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun playCountDao(): PlayCountDao
     abstract fun historyDao(): HistoryDao
-    abstract fun webDavDao(): WebDAVDao
+    abstract fun serverDao(): ServerDao
 }

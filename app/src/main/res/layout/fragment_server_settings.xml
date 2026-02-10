@@ -17,13 +17,13 @@
             android:paddingTop="8dp"
             android:paddingBottom="80dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-            tools:listitem="@layout/item_webdav_config" />
+            tools:listitem="@layout/item_server_config" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/emptyView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="No WebDAV servers configured\nTap + to add a server"
+            android:text="No servers configured\nTap + to add a server"
             android:textAlignment="center"
             android:textColor="?android:attr/textColorSecondary"
             android:gravity="center"
@@ -56,7 +56,7 @@
             app:layout_constraintTop_toBottomOf="@id/progressBar"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            tools:text="Syncing 1/6: Pop" />
+            tools:text="Syncing..." />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -69,6 +69,6 @@
         android:layout_marginBottom="100dp"
         android:src="@drawable/ic_add"
         app:tint="?attr/colorOnPrimary"
-        contentDescription="Add WebDAV server" />
+        android:contentDescription="Add server" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

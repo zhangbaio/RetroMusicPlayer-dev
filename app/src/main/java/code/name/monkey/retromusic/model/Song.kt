@@ -33,11 +33,11 @@ open class Song(
     open val artistName: String,
     open val composer: String?,
     open val albumArtist: String?,
-    // WebDAV support fields - defaults ensure backward compatibility
+    // Server/remote support fields - defaults ensure backward compatibility
     open val sourceType: SourceType = SourceType.LOCAL,
-    open val remotePath: String? = null,  // Full URL for WebDAV songs
-    open val webDavConfigId: Long? = null,
-    open val webDavAlbumArtPath: String? = null
+    open val remotePath: String? = null,  // Full URL for server songs
+    open val webDavConfigId: Long? = null,  // Server config ID (DB column name kept for migration compat)
+    open val webDavAlbumArtPath: String? = null  // Server cover URL (DB column name kept for migration compat)
 ) : Parcelable {
 
     val displayArtistName: String

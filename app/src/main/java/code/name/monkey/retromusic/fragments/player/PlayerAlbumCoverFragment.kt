@@ -28,7 +28,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.preference.PreferenceManager
 import androidx.viewpager.widget.ViewPager
-import kotlinx.coroutines.launch
 import code.name.monkey.appthemehelper.util.ColorUtil
 import code.name.monkey.appthemehelper.util.MaterialValueHelper
 import code.name.monkey.retromusic.LYRICS_TYPE
@@ -52,7 +51,10 @@ import code.name.monkey.retromusic.util.CoverLyricsType
 import code.name.monkey.retromusic.util.LyricUtil
 import code.name.monkey.retromusic.util.PreferenceUtil
 import code.name.monkey.retromusic.util.color.MediaNotificationProcessor
-import code.name.monkey.retromusic.webdav.WebDAVLyricUtil
+import code.name.monkey.retromusic.model.Song
+import code.name.monkey.retromusic.model.SourceType
+import code.name.monkey.retromusic.repository.ServerRepository
+import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -175,10 +177,10 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
                 val embeddedLyrics = LyricUtil.getEmbeddedSyncedLyrics(song.data)
                 if (embeddedLyrics != null) {
                     binding.lyricsView.loadLrc(embeddedLyrics)
-                } else if (WebDAVLyricUtil.isWebDAVSong(song)) {
-                    val webdavLyrics = WebDAVLyricUtil.getSyncedLyrics(song)
-                    if (webdavLyrics != null) {
-                        binding.lyricsView.loadLrc(webdavLyrics)
+                } else if (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV) {
+                    val serverLyrics = loadServerLyrics(song)
+                    if (serverLyrics != null) {
+                        binding.lyricsView.loadLrc(serverLyrics)
                     } else {
                         withContext(Dispatchers.Main) {
                             binding.lyricsView.reset()
@@ -192,6 +194,21 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
                     }
                 }
             }
+        }
+    }
+
+    private suspend fun loadServerLyrics(song: Song): String? {
+        return try {
+            val configId = song.webDavConfigId ?: return null
+            val trackIdStr = song.remotePath
+                ?.let { Regex("/api/v1/tracks/(\\d+)/stream").find(it) }
+                ?.groupValues?.getOrNull(1)
+            val serverTrackId = trackIdStr?.toLongOrNull() ?: return null
+            val serverRepository = GlobalContext.get().get<ServerRepository>()
+            serverRepository.getLyrics(serverTrackId, configId)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 

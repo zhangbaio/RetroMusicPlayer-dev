@@ -38,7 +38,7 @@ import code.name.monkey.retromusic.fragments.ReloadType
 import code.name.monkey.retromusic.helper.MusicPlayerRemote
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.model.SourceType
-import code.name.monkey.retromusic.repository.WebDAVRepository
+import code.name.monkey.retromusic.repository.ServerRepository
 import code.name.monkey.retromusic.extensions.showToast
 import code.name.monkey.retromusic.util.MusicUtil
 import code.name.monkey.retromusic.util.SAFUtil
@@ -97,8 +97,8 @@ class DeleteSongsDialog : DialogFragment() {
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         libraryViewModel = activity?.getViewModel() as LibraryViewModel
         val songs = extraNotNull<List<Song>>(EXTRA_SONG).value
-        val hasWebDavSongs = songs.any(::isWebDavSong)
-        if (VersionUtils.hasR() && !hasWebDavSongs) {
+        val hasServerSongs = songs.any(::isServerSong)
+        if (VersionUtils.hasR() && !hasServerSongs) {
             val deleteResultLauncher =
                 registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
                     if (result.resultCode == Activity.RESULT_OK) {
@@ -145,7 +145,7 @@ class DeleteSongsDialog : DialogFragment() {
                     if ((songs.size == 1) && MusicPlayerRemote.isPlaying(songs[0])) {
                         MusicPlayerRemote.playNextSong()
                     }
-                    val localSongs = songs.filterNot(::isWebDavSong)
+                    val localSongs = songs.filterNot(::isServerSong)
                     if (!SAFUtil.isSAFRequiredForSongs(localSongs)) {
                         deleteSongs(songs)
                     } else {
@@ -191,8 +191,8 @@ class DeleteSongsDialog : DialogFragment() {
         appContext: Context,
         useSafDelete: Boolean = false
     ) {
-        val localSongs = songs.filterNot(::isWebDavSong)
-        val webDavSongs = songs.filter(::isWebDavSong)
+        val localSongs = songs.filterNot(::isServerSong)
+        val serverSongs = songs.filter(::isServerSong)
 
         if (localSongs.isNotEmpty()) {
             if (useSafDelete && hostActivity != null) {
@@ -202,21 +202,22 @@ class DeleteSongsDialog : DialogFragment() {
             }
         }
 
-        if (webDavSongs.isNotEmpty()) {
-            val webDavRepository = GlobalContext.get().get<WebDAVRepository>()
-            webDavRepository.deleteSongsByIds(webDavSongs.map { it.id })
-            MusicPlayerRemote.removeFromQueue(webDavSongs)
+        if (serverSongs.isNotEmpty()) {
+            val serverRepository = GlobalContext.get().get<ServerRepository>()
+            serverRepository.deleteSongsByIds(serverSongs.map { it.id })
+            MusicPlayerRemote.removeFromQueue(serverSongs)
             if (localSongs.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     appContext.showToast(
-                        appContext.getString(R.string.deleted_x_songs, webDavSongs.size)
+                        appContext.getString(R.string.deleted_x_songs, serverSongs.size)
                     )
                 }
             }
         }
     }
 
-    private fun isWebDavSong(song: Song): Boolean = song.sourceType == SourceType.WEBDAV
+    private fun isServerSong(song: Song): Boolean =
+        song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV
 
     private fun reloadTabs() {
         libraryViewModel.forceReload(ReloadType.Songs)

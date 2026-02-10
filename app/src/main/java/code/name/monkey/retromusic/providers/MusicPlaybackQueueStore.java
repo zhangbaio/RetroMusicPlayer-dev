@@ -309,7 +309,7 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
       }
     }
     if (data.startsWith("http://") || data.startsWith("https://")) {
-      return SourceType.WEBDAV;
+      return SourceType.SERVER;
     }
     return SourceType.LOCAL;
   }
@@ -320,7 +320,7 @@ public class MusicPlaybackQueueStore extends SQLiteOpenHelper {
     if (remotePath != null && !remotePath.trim().isEmpty()) {
       return remotePath;
     }
-    if (sourceType == SourceType.WEBDAV
+    if ((sourceType == SourceType.SERVER || sourceType == SourceType.WEBDAV)
         && (data.startsWith("http://") || data.startsWith("https://"))) {
       return data;
     }

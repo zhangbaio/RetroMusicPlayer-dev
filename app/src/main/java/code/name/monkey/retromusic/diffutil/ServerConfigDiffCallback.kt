@@ -15,14 +15,14 @@
 package code.name.monkey.retromusic.diffutil
 
 import androidx.recyclerview.widget.DiffUtil
-import code.name.monkey.retromusic.model.WebDAVConfig
+import code.name.monkey.retromusic.model.ServerConfig
 
-class WebDAVConfigDiffCallback : DiffUtil.ItemCallback<WebDAVConfig>() {
-    override fun areItemsTheSame(oldItem: WebDAVConfig, newItem: WebDAVConfig): Boolean {
+class ServerConfigDiffCallback : DiffUtil.ItemCallback<ServerConfig>() {
+    override fun areItemsTheSame(oldItem: ServerConfig, newItem: ServerConfig): Boolean {
         return oldItem.id == newItem.id
     }
 
-    override fun areContentsTheSame(oldItem: WebDAVConfig, newItem: WebDAVConfig): Boolean {
+    override fun areContentsTheSame(oldItem: ServerConfig, newItem: ServerConfig): Boolean {
         return oldItem == newItem
     }
 }

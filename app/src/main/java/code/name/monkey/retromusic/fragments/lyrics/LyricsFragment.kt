@@ -47,7 +47,8 @@ import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.util.FileUtils
 import code.name.monkey.retromusic.util.LyricUtil
 import code.name.monkey.retromusic.util.UriUtil
-import code.name.monkey.retromusic.webdav.WebDAVLyricUtil
+import code.name.monkey.retromusic.repository.ServerRepository
+import org.koin.core.context.GlobalContext
 import com.afollestad.materialdialogs.input.input
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -201,7 +202,7 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
 
     @SuppressLint("CheckResult")
     private fun editNormalLyrics(lyrics: String? = null) {
-        if (song.sourceType == SourceType.WEBDAV) {
+        if (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV) {
             editSyncedLyrics(lyrics)
             return
         }
@@ -313,9 +314,9 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
     }
 
     private fun loadNormalLyrics() {
-        if (song.sourceType == SourceType.WEBDAV) {
+        if (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV) {
             GlobalScope.launch(Dispatchers.IO) {
-                val lyrics = WebDAVLyricUtil.getNormalLyrics(song)
+                val lyrics = loadServerLyrics(song)
                 withContext(Dispatchers.Main) {
                     if (_binding == null) return@withContext
                     binding.normalLyrics.isVisible = !lyrics.isNullOrEmpty()
@@ -351,13 +352,13 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
             binding.lyricsView.loadLrc(embeddedLyrics)
             return true
         }
-        if (song.sourceType == SourceType.WEBDAV) {
+        if (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV) {
             GlobalScope.launch(Dispatchers.IO) {
-                val webdavLyrics = WebDAVLyricUtil.getSyncedLyrics(song)
+                val serverLyrics = loadServerLyrics(song)
                 withContext(Dispatchers.Main) {
                     if (_binding == null) return@withContext
-                    if (webdavLyrics != null) {
-                        binding.lyricsView.loadLrc(webdavLyrics)
+                    if (serverLyrics != null) {
+                        binding.lyricsView.loadLrc(serverLyrics)
                         binding.lyricsView.isVisible = true
                         binding.normalLyrics.isVisible = false
                         binding.noLyricsFound.isVisible = false
@@ -365,7 +366,7 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
                     }
                 }
             }
-            // Return true to show lyricsView initially (will be updated async)
+            // Return false to indicate async loading in progress
             return false
         }
         binding.lyricsView.setLabel(getString(R.string.empty))
@@ -374,8 +375,8 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
 
     private fun loadLyrics() {
         lyricsType = if (!loadLRCLyrics()) {
-            if (song.sourceType == SourceType.WEBDAV) {
-                // WebDAV async loading in progress, show lyrics view as loading
+            if (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV) {
+                // Server async loading in progress, show lyrics view as loading
                 binding.lyricsView.isVisible = true
                 binding.normalLyrics.isVisible = false
                 binding.noLyricsFound.isVisible = false
@@ -408,6 +409,27 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
         if (MusicPlayerRemote.playingQueue.isNotEmpty())
             mainActivity.expandPanel()
         _binding = null
+    }
+
+    /**
+     * Load lyrics from the music server API.
+     * Extracts server track ID from the song's remotePath URL.
+     */
+    private suspend fun loadServerLyrics(song: Song): String? {
+        return try {
+            val configId = song.webDavConfigId ?: return null
+            // Extract serverTrackId from remotePath like ".../api/v1/tracks/{id}/stream"
+            val trackIdStr = song.remotePath
+                ?.let { Regex("/api/v1/tracks/(\\d+)/stream").find(it) }
+                ?.groupValues?.getOrNull(1)
+            val serverTrackId = trackIdStr?.toLongOrNull() ?: return null
+
+            val serverRepository = GlobalContext.get().get<ServerRepository>()
+            serverRepository.getLyrics(serverTrackId, configId)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
     enum class LyricsType {

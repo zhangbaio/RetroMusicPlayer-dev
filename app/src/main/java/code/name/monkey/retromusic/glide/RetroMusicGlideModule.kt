@@ -24,8 +24,8 @@ import code.name.monkey.retromusic.glide.palette.BitmapPaletteTranscoder
 import code.name.monkey.retromusic.glide.palette.BitmapPaletteWrapper
 import code.name.monkey.retromusic.glide.playlistPreview.PlaylistPreview
 import code.name.monkey.retromusic.glide.playlistPreview.PlaylistPreviewLoader
-import code.name.monkey.retromusic.glide.webdavcover.WebDAVAudioCover
-import code.name.monkey.retromusic.glide.webdavcover.WebDAVAudioCoverLoader
+import code.name.monkey.retromusic.glide.servercover.ServerAudioCover
+import code.name.monkey.retromusic.glide.servercover.ServerAudioCoverLoader
 import com.bumptech.glide.Glide
 import com.bumptech.glide.Registry
 import com.bumptech.glide.annotation.GlideModule
@@ -46,9 +46,9 @@ class RetroMusicGlideModule : AppGlideModule() {
             AudioFileCoverLoader.Factory()
         )
         registry.prepend(
-            WebDAVAudioCover::class.java,
+            ServerAudioCover::class.java,
             InputStream::class.java,
-            WebDAVAudioCoverLoader.Factory()
+            ServerAudioCoverLoader.Factory()
         )
         registry.prepend(ArtistImage::class.java, InputStream::class.java, Factory(context))
         registry.register(

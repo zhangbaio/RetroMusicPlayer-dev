@@ -9,14 +9,16 @@ import code.name.monkey.retromusic.util.MusicUtil
 
 val Song.uri
     get() = when {
-        sourceType == SourceType.WEBDAV || data.startsWith("http://") || data.startsWith("https://") ->
+        sourceType == SourceType.SERVER || sourceType == SourceType.WEBDAV
+                || data.startsWith("http://") || data.startsWith("https://") ->
             Uri.parse(remotePath ?: data)
         else -> MusicUtil.getSongFileUri(songId = id)
     }
 
 val Song.albumArtUri
     get() = when {
-        sourceType == SourceType.WEBDAV || data.startsWith("http://") || data.startsWith("https://") ->
+        sourceType == SourceType.SERVER || sourceType == SourceType.WEBDAV
+                || data.startsWith("http://") || data.startsWith("https://") ->
             (webDavAlbumArtPath ?: remotePath ?: data).let(Uri::parse)
         else -> MusicUtil.getMediaStoreAlbumCoverUri(albumId)
     }

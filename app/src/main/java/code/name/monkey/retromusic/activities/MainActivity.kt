@@ -35,7 +35,7 @@ import code.name.monkey.retromusic.interfaces.IScrollHelper
 import code.name.monkey.retromusic.model.CategoryInfo
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.repository.PlaylistSongsLoader
-import code.name.monkey.retromusic.repository.WebDAVRepository
+import code.name.monkey.retromusic.repository.ServerRepository
 import code.name.monkey.retromusic.service.MusicService
 import code.name.monkey.retromusic.util.FileUtil
 import code.name.monkey.retromusic.util.AppRater
@@ -57,7 +57,7 @@ class MainActivity : AbsCastActivity() {
     companion object {
         const val TAG = "MainActivity"
         const val EXPAND_PANEL = "expand_panel"
-        private const val WEBDAV_VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000L
+        private const val SERVER_VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000L
         private const val LOCAL_SCAN_CHUNK_SIZE = 200
         private const val LOCAL_SCAN_CHUNK_TIMEOUT_MS = 45_000L
     }
@@ -80,7 +80,7 @@ class MainActivity : AbsCastActivity() {
 
         setupNavigationController()
         maybeBootstrapLocalSongsOnFirstInstall()
-        maybeRunWebDavValidation()
+        maybeRunServerValidation()
 
         WhatsNewFragment.showChangeLog(this)
     }
@@ -183,32 +183,32 @@ class MainActivity : AbsCastActivity() {
             }
         }
 
-    private fun maybeRunWebDavValidation() {
+    private fun maybeRunServerValidation() {
         val now = System.currentTimeMillis()
         val lastRunAt = PreferenceUtil.lastWebDavValidationAt
-        if (now - lastRunAt < WEBDAV_VALIDATION_INTERVAL_MS) {
+        if (now - lastRunAt < SERVER_VALIDATION_INTERVAL_MS) {
             return
         }
 
         PreferenceUtil.lastWebDavValidationAt = now
         lifecycleScope.launch(IO) {
             runCatching {
-                val webDavRepository: WebDAVRepository = get()
-                val enabledConfigs = webDavRepository.getEnabledConfigs()
+                val serverRepository: ServerRepository = get()
+                val enabledConfigs = serverRepository.getEnabledConfigs()
                 if (enabledConfigs.isEmpty()) {
                     return@runCatching
                 }
                 enabledConfigs.forEach { config ->
-                    val result = webDavRepository.syncSongs(config.id)
+                    val result = serverRepository.syncSongs(config.id)
                     if (result.isFailure) {
                         Log.w(
                             TAG,
-                            "WebDAV periodic validation failed for configId=${config.id}: ${result.exceptionOrNull()?.message}"
+                            "Server periodic validation failed for configId=${config.id}: ${result.exceptionOrNull()?.message}"
                         )
                     }
                 }
             }.onFailure { error ->
-                Log.e(TAG, "WebDAV periodic validation crashed", error)
+                Log.e(TAG, "Server periodic validation crashed", error)
             }
         }
     }

@@ -3,15 +3,15 @@
 
     <item
         android:id="@+id/action_sync"
-        android:title="Sync" />
+        android:title="@string/server_sync" />
     <item
-        android:id="@+id/action_test_connection"
-        android:title="Test Connection" />
+        android:id="@+id/action_scan"
+        android:title="@string/server_scan" />
     <item
         android:id="@+id/action_edit"
-        android:title="Edit" />
+        android:title="@string/action_edit" />
     <item
         android:id="@+id/action_delete"
-        android:title="Delete" />
+        android:title="@string/action_delete" />
 
 </menu>

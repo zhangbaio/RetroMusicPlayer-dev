@@ -25,7 +25,7 @@ import code.name.monkey.retromusic.service.playback.Playback.PlaybackCallbacks
 import code.name.monkey.retromusic.util.PreferenceUtil.playbackPitch
 import code.name.monkey.retromusic.util.PreferenceUtil.playbackSpeed
 import code.name.monkey.retromusic.util.logE
-import code.name.monkey.retromusic.webdav.WebDAVDataSourceFactory
+import code.name.monkey.retromusic.network.ServerDataSourceFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,7 +34,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class RetroExoPlayer(context: Context) : AudioManagerPlayback(context), Player.Listener, KoinComponent {
-    private val webDAVRepository: code.name.monkey.retromusic.repository.WebDAVRepository by inject()
+    private val serverRepository: code.name.monkey.retromusic.repository.ServerRepository by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var player: ExoPlayer = ExoPlayer.Builder(context).build()
@@ -106,46 +106,40 @@ class RetroExoPlayer(context: Context) : AudioManagerPlayback(context), Player.L
     }
 
     /**
-     * Create a MediaSource for the song, handling WebDAV authentication if needed
+     * Create a MediaSource for the song, handling server authentication if needed
      */
     private suspend fun createMediaSource(song: Song): MediaSource {
         val uriString = song.uri.toString()
-        return if (song.sourceType == SourceType.WEBDAV || uriString.startsWith("http://") || uriString.startsWith("https://")) {
-            createWebDAVMediaSource(song)
+        return if (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV
+            || uriString.startsWith("http://") || uriString.startsWith("https://")) {
+            createServerMediaSource(song)
         } else {
             createDefaultMediaSource(song)
         }
     }
 
     /**
-     * Create a MediaSource with WebDAV authentication
+     * Create a MediaSource with server Bearer Token authentication
      */
-    private suspend fun createWebDAVMediaSource(song: Song): MediaSource {
-        val configId = song.webDavConfigId ?: resolveWebDAVConfigIdFromUrl(song.uri.toString())
+    private suspend fun createServerMediaSource(song: Song): MediaSource {
+        val configId = song.webDavConfigId ?: resolveServerConfigIdFromUrl(song.uri.toString())
             ?: return createDefaultMediaSource(song)
 
-        val config = webDAVRepository.getConfigById(configId)
+        val config = serverRepository.getConfigById(configId)
             ?: return createDefaultMediaSource(song)
 
-        // Decrypt password for playback
-        val decryptedPassword = code.name.monkey.retromusic.webdav.WebDAVCryptoUtil
-            .decryptPassword(config.password, config.id)
-
-        // Create custom data source factory with authentication
-        val dataSourceFactory = WebDAVDataSourceFactory(
-            config.username,
-            decryptedPassword
-        )
+        // Create custom data source factory with Bearer Token authentication
+        val dataSourceFactory = ServerDataSourceFactory(config.apiToken)
 
         return ProgressiveMediaSource.Factory(dataSourceFactory)
             .createMediaSource(MediaItem.fromUri(song.uri))
     }
 
-    private suspend fun resolveWebDAVConfigIdFromUrl(url: String): Long? {
+    private suspend fun resolveServerConfigIdFromUrl(url: String): Long? {
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             return null
         }
-        return webDAVRepository.getEnabledConfigs()
+        return serverRepository.getEnabledConfigs()
             .firstOrNull { config ->
                 url.startsWith(config.serverUrl.trimEnd('/'), ignoreCase = true)
             }

@@ -112,7 +112,7 @@ class RealRepository(
     private val topPlayedRepository: TopPlayedRepository,
     private val roomRepository: RoomRepository,
     private val localDataRepository: LocalDataRepository,
-    private val webDAVRepository: WebDAVRepository,
+    private val serverRepository: ServerRepository,
 ) : Repository {
 
     override suspend fun deleteSongs(songs: List<Song>) = roomRepository.deleteSongs(songs)
@@ -133,18 +133,18 @@ class RealRepository(
 
     override suspend fun fetchAlbums(): List<Album> {
         val localAlbums = albumRepository.albums()
-        val webDAVSongs = webDAVRepository.getAllSongs()
-        if (webDAVSongs.isEmpty()) {
+        val serverSongs = serverRepository.getAllSongs()
+        if (serverSongs.isEmpty()) {
             return localAlbums
         }
-        // Create albums from WebDAV songs
-        val webDAVAlbums = (albumRepository as RealAlbumRepository).splitIntoAlbums(webDAVSongs, sorted = false)
+        // Create albums from server songs
+        val serverAlbums = (albumRepository as RealAlbumRepository).splitIntoAlbums(serverSongs, sorted = false)
         // Merge: use album title as key to avoid ID conflicts
         val albumMap = mutableMapOf<String, Album>()
         localAlbums.forEach { album ->
             albumMap[album.title.lowercase()] = album
         }
-        webDAVAlbums.forEach { album ->
+        serverAlbums.forEach { album ->
             val key = album.title.lowercase()
             val existing = albumMap[key]
             if (existing != null) {
@@ -163,9 +163,9 @@ class RealRepository(
         if (localAlbum.songs.isNotEmpty()) {
             return localAlbum
         }
-        // Try to find in WebDAV songs
-        val webDAVSongs = webDAVRepository.getAllSongs()
-        val matchingSongs = webDAVSongs.filter { it.albumId == albumId }
+        // Try to find in server songs
+        val serverSongs = serverRepository.getAllSongs()
+        val matchingSongs = serverSongs.filter { it.albumId == albumId }
         if (matchingSongs.isNotEmpty()) {
             return Album(albumId, matchingSongs)
         }
@@ -176,19 +176,19 @@ class RealRepository(
 
     override suspend fun fetchArtists(): List<Artist> {
         val localArtists = artistRepository.artists()
-        val webDAVSongs = webDAVRepository.getAllSongs()
-        if (webDAVSongs.isEmpty()) {
+        val serverSongs = serverRepository.getAllSongs()
+        if (serverSongs.isEmpty()) {
             return localArtists
         }
-        // Create albums from WebDAV songs, then artists from albums
-        val webDAVAlbums = (albumRepository as RealAlbumRepository).splitIntoAlbums(webDAVSongs, sorted = false)
-        val webDAVArtists = (artistRepository as RealArtistRepository).splitIntoArtists(webDAVAlbums)
+        // Create albums from server songs, then artists from albums
+        val serverAlbums = (albumRepository as RealAlbumRepository).splitIntoAlbums(serverSongs, sorted = false)
+        val serverArtists = (artistRepository as RealArtistRepository).splitIntoArtists(serverAlbums)
         // Merge: use artist name as key to avoid ID conflicts
         val artistMap = mutableMapOf<String, Artist>()
         localArtists.forEach { artist ->
             artistMap[artist.name.lowercase()] = artist
         }
-        webDAVArtists.forEach { artist ->
+        serverArtists.forEach { artist ->
             val key = artist.name.lowercase()
             val existing = artistMap[key]
             if (existing != null) {
@@ -209,9 +209,9 @@ class RealRepository(
         if (localArtist.songs.isNotEmpty()) {
             return localArtist
         }
-        // Try to find in WebDAV songs
-        val webDAVSongs = webDAVRepository.getAllSongs()
-        val matchingSongs = webDAVSongs.filter { it.artistId == artistId }
+        // Try to find in server songs
+        val serverSongs = serverRepository.getAllSongs()
+        val matchingSongs = serverSongs.filter { it.artistId == artistId }
         if (matchingSongs.isNotEmpty()) {
             val albums = (albumRepository as RealAlbumRepository).splitIntoAlbums(matchingSongs, sorted = false)
             return Artist(artistId, albums)
@@ -236,8 +236,8 @@ class RealRepository(
 
     override suspend fun allSongs(): List<Song> {
         val localSongs = songRepository.songs()
-        val webDAVSongs = webDAVRepository.getAllSongs()
-        return localSongs + webDAVSongs
+        val serverSongs = serverRepository.getAllSongs()
+        return localSongs + serverSongs
     }
 
     override suspend fun search(query: String?, filter: Filter): MutableList<Any> =

@@ -14,7 +14,7 @@ import code.name.monkey.retromusic.extensions.accentColor
 import code.name.monkey.retromusic.glide.artistimage.ArtistImage
 import code.name.monkey.retromusic.glide.audiocover.AudioFileCover
 import code.name.monkey.retromusic.glide.palette.BitmapPaletteWrapper
-import code.name.monkey.retromusic.glide.webdavcover.WebDAVAudioCover
+import code.name.monkey.retromusic.glide.servercover.ServerAudioCover
 import code.name.monkey.retromusic.model.Artist
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.model.SourceType
@@ -56,24 +56,17 @@ object RetroGlideExtension {
     private val DEFAULT_DISK_CACHE_STRATEGY = DiskCacheStrategy.AUTOMATIC
 
     private const val DEFAULT_ANIMATION = android.R.anim.fade_in
-    private val WEBDAV_COVER_FILE_NAMES = listOf(
-        "cover.jpg", "album.jpg", "folder.jpg",
-        "cover.png", "album.png", "folder.png",
-        "cover.webp", "album.webp", "folder.webp"
-    )
 
     fun RequestManager.asBitmapPalette(): RequestBuilder<BitmapPaletteWrapper> {
         return this.`as`(BitmapPaletteWrapper::class.java)
     }
 
     private fun getSongModel(song: Song, ignoreMediaStore: Boolean): Any {
-        if (song.sourceType == SourceType.WEBDAV) {
+        if (song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV) {
             val configId = song.webDavConfigId
-            if (configId != null) {
-                val coverUrls = buildWebDAVCoverUrls(song)
-                if (coverUrls.isNotEmpty()) {
-                    return WebDAVAudioCover(configId, coverUrls)
-                }
+            val coverUrl = song.webDavAlbumArtPath
+            if (configId != null && !coverUrl.isNullOrBlank()) {
+                return ServerAudioCover(configId, coverUrl)
             }
             return DEFAULT_SONG_IMAGE
         }
@@ -86,31 +79,6 @@ object RetroGlideExtension {
 
     fun getSongModel(song: Song): Any {
         return getSongModel(song, PreferenceUtil.isIgnoreMediaStoreArtwork)
-    }
-
-    private fun buildWebDAVCoverUrls(song: Song): List<String> {
-        val urls = mutableListOf<String>()
-        song.webDavAlbumArtPath
-            ?.takeIf { it.isNotBlank() }
-            ?.let { urls.add(it) }
-        urls.addAll(guessWebDAVCoverUrls(song.data))
-        return urls.distinct()
-    }
-
-    private fun guessWebDAVCoverUrls(audioUrl: String): List<String> {
-        val uri = Uri.parse(audioUrl)
-        val path = uri.path ?: return emptyList()
-        val parentPath = path.substringBeforeLast('/', "")
-        return WEBDAV_COVER_FILE_NAMES.mapNotNull { coverFileName ->
-            runCatching {
-                val coverPath = if (parentPath.isBlank()) {
-                    "/$coverFileName"
-                } else {
-                    "${parentPath.trimEnd('/')}/$coverFileName"
-                }
-                uri.buildUpon().path(coverPath).build().toString()
-            }.getOrNull()
-        }
     }
 
     fun getArtistModel(artist: Artist): Any {

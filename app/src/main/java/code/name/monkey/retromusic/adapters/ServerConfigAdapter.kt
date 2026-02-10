@@ -15,7 +15,6 @@
 package code.name.monkey.retromusic.adapters
 
 import android.view.LayoutInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.PopupMenu
@@ -23,22 +22,22 @@ import androidx.core.view.isVisible
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import code.name.monkey.retromusic.R
-import code.name.monkey.retromusic.databinding.ItemWebdavConfigBinding
-import code.name.monkey.retromusic.diffutil.WebDAVConfigDiffCallback
-import code.name.monkey.retromusic.model.WebDAVConfig
+import code.name.monkey.retromusic.databinding.ItemServerConfigBinding
+import code.name.monkey.retromusic.diffutil.ServerConfigDiffCallback
+import code.name.monkey.retromusic.model.ServerConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * RecyclerView adapter for WebDAV server configurations
+ * RecyclerView adapter for music server configurations
  */
-class WebDAVConfigAdapter(
+class ServerConfigAdapter(
     private val callback: Callback? = null
-) : ListAdapter<WebDAVConfig, WebDAVConfigAdapter.ViewHolder>(WebDAVConfigDiffCallback()) {
+) : ListAdapter<ServerConfig, ServerConfigAdapter.ViewHolder>(ServerConfigDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemWebdavConfigBinding.inflate(
+        val binding = ItemServerConfigBinding.inflate(
             LayoutInflater.from(parent.context),
             parent,
             false
@@ -51,13 +50,12 @@ class WebDAVConfigAdapter(
     }
 
     inner class ViewHolder(
-        private val binding: ItemWebdavConfigBinding
+        private val binding: ItemServerConfigBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(config: WebDAVConfig) {
+        fun bind(config: ServerConfig) {
             binding.nameText.text = config.name
             binding.urlText.text = config.serverUrl
-            binding.usernameText.text = config.username
 
             // Show last sync time
             if (config.lastSynced > 0) {
@@ -82,9 +80,9 @@ class WebDAVConfigAdapter(
             }
         }
 
-        private fun showPopupMenu(view: View, config: WebDAVConfig) {
+        private fun showPopupMenu(view: View, config: ServerConfig) {
             val popup = PopupMenu(view.context, view)
-            popup.menuInflater.inflate(R.menu.menu_webdav_config, popup.menu)
+            popup.menuInflater.inflate(R.menu.menu_server_config, popup.menu)
 
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
@@ -92,8 +90,8 @@ class WebDAVConfigAdapter(
                         callback?.onConfigSync(config)
                         true
                     }
-                    R.id.action_test_connection -> {
-                        callback?.onConfigTestConnection(config)
+                    R.id.action_scan -> {
+                        callback?.onConfigScan(config)
                         true
                     }
                     R.id.action_edit -> {
@@ -113,10 +111,10 @@ class WebDAVConfigAdapter(
     }
 
     interface Callback {
-        fun onConfigClick(config: WebDAVConfig)
-        fun onConfigEdit(config: WebDAVConfig)
-        fun onConfigDelete(config: WebDAVConfig)
-        fun onConfigSync(config: WebDAVConfig)
-        fun onConfigTestConnection(config: WebDAVConfig)
+        fun onConfigClick(config: ServerConfig)
+        fun onConfigEdit(config: ServerConfig)
+        fun onConfigDelete(config: ServerConfig)
+        fun onConfigSync(config: ServerConfig)
+        fun onConfigScan(config: ServerConfig)
     }
 }

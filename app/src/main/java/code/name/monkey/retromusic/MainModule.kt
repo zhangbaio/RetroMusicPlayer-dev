@@ -1,7 +1,6 @@
 package code.name.monkey.retromusic
 
 import androidx.room.Room
-import androidx.work.WorkManager
 import code.name.monkey.retromusic.auto.AutoMusicProvider
 import code.name.monkey.retromusic.cast.RetroWebServer
 import code.name.monkey.retromusic.db.MIGRATION_23_24
@@ -9,21 +8,25 @@ import code.name.monkey.retromusic.db.MIGRATION_24_25
 import code.name.monkey.retromusic.db.MIGRATION_25_26
 import code.name.monkey.retromusic.db.MIGRATION_27_28
 import code.name.monkey.retromusic.db.MIGRATION_28_29
+import code.name.monkey.retromusic.db.MIGRATION_29_30
 import code.name.monkey.retromusic.db.RetroDatabase
 import code.name.monkey.retromusic.fragments.LibraryViewModel
 import code.name.monkey.retromusic.fragments.albums.AlbumDetailsViewModel
 import code.name.monkey.retromusic.fragments.artists.ArtistDetailsViewModel
 import code.name.monkey.retromusic.fragments.genres.GenreDetailsViewModel
 import code.name.monkey.retromusic.fragments.playlists.PlaylistDetailsViewModel
+import code.name.monkey.retromusic.fragments.server.ServerViewModel
 import code.name.monkey.retromusic.model.Genre
+import code.name.monkey.retromusic.model.ServerConfig
+import code.name.monkey.retromusic.network.MusicApiService
 import code.name.monkey.retromusic.network.provideDefaultCache
 import code.name.monkey.retromusic.network.provideLastFmRest
 import code.name.monkey.retromusic.network.provideLastFmRetrofit
 import code.name.monkey.retromusic.network.provideOkHttp
-import code.name.monkey.retromusic.fragments.webdav.WebDAVViewModel
+import code.name.monkey.retromusic.network.provideMusicApiOkHttp
+import code.name.monkey.retromusic.network.provideMusicApiRetrofit
+import code.name.monkey.retromusic.network.provideMusicApiService
 import code.name.monkey.retromusic.repository.*
-import code.name.monkey.retromusic.webdav.SardineWebDAVClient
-import code.name.monkey.retromusic.webdav.WebDAVClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.bind
@@ -54,7 +57,8 @@ private val roomModule = module {
                 MIGRATION_24_25,
                 MIGRATION_25_26,
                 MIGRATION_27_28,
-                MIGRATION_28_29
+                MIGRATION_28_29,
+                MIGRATION_29_30
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -73,7 +77,7 @@ private val roomModule = module {
     }
 
     factory {
-        get<RetroDatabase>().webDavDao()
+        get<RetroDatabase>().serverDao()
     }
 
     single {
@@ -98,9 +102,6 @@ private val mainModule = module {
         androidContext().contentResolver
     }
     single {
-        WorkManager.getInstance(androidContext())
-    }
-    single {
         RetroWebServer(get())
     }
 }
@@ -119,7 +120,7 @@ private val dataModule = module {
             get(),
             get(),
             get(),
-            get(), // WebDAVRepository
+            get(), // ServerRepository
         )
     } bind Repository::class
 
@@ -204,15 +205,18 @@ private val viewModules = module {
         )
     }
 
-    viewModel { WebDAVViewModel(get(), get()) }
+    viewModel { ServerViewModel(get()) }
 }
 
-private val webdavModule = module {
-    factory<WebDAVClient> { SardineWebDAVClient() }
-
+private val serverModule = module {
     single {
-        RealWebDAVRepository(get(), get())
-    } bind WebDAVRepository::class
+        val apiServiceProvider: suspend (ServerConfig) -> MusicApiService = { config ->
+            val okHttp = provideMusicApiOkHttp(config.serverUrl, config.apiToken)
+            val retrofit = provideMusicApiRetrofit(config.serverUrl, okHttp)
+            provideMusicApiService(retrofit)
+        }
+        RealServerRepository(get(), apiServiceProvider)
+    } bind ServerRepository::class
 }
 
-val appModules = listOf(mainModule, dataModule, autoModule, viewModules, networkModule, roomModule, webdavModule)
+val appModules = listOf(mainModule, dataModule, autoModule, viewModules, networkModule, roomModule, serverModule)

@@ -162,13 +162,13 @@
             app:settingListItemTitle="@string/backup_restore_title" />
 
         <code.name.monkey.retromusic.views.SettingListItemView
-            android:id="@+id/webdavSettings"
+            android:id="@+id/serverSettings"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:settingListItemIcon="@drawable/ic_cloud"
             app:settingListItemIconColor="@color/apple_music_accent"
-            app:settingListItemText="Manage WebDAV servers for cloud music"
-            app:settingListItemTitle="WebDAV" />
+            app:settingListItemText="@string/server_settings_summary"
+            app:settingListItemTitle="@string/server_settings_title" />
 
         <code.name.monkey.retromusic.views.SettingListItemView
             android:id="@+id/aboutSettings"
