@@ -234,11 +234,7 @@ class RealRepository(
 
     override suspend fun fetchGenres(): List<Genre> = genreRepository.genres()
 
-    override suspend fun allSongs(): List<Song> {
-        val localSongs = songRepository.songs()
-        val serverSongs = serverRepository.getAllSongs()
-        return localSongs + serverSongs
-    }
+    override suspend fun allSongs(): List<Song> = serverRepository.getAllSongs()
 
     override suspend fun search(query: String?, filter: Filter): MutableList<Any> =
         searchRepository.searchAll(context, query, filter)

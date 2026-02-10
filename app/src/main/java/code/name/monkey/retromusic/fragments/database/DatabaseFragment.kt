@@ -65,11 +65,11 @@ class DatabaseFragment : AbsMainActivityFragment(R.layout.fragment_database), IA
             findNavController().navigate(R.id.action_album, null, navOptions)
         }
         binding.entrySongs.setOnClickListener {
-            val songsTabItem = mainActivity.navigationView.menu.findItem(R.id.action_song)
-            if (songsTabItem != null && songsTabItem.isVisible) {
-                mainActivity.navigationView.selectedItemId = R.id.action_song
+            val webTabItem = mainActivity.navigationView.menu.findItem(R.id.action_web)
+            if (webTabItem != null && webTabItem.isVisible) {
+                mainActivity.navigationView.selectedItemId = R.id.action_web
             } else {
-                findNavController().navigate(R.id.action_song, null, navOptions)
+                findNavController().navigate(R.id.action_web, null, navOptions)
             }
         }
     }

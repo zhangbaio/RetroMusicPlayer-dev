@@ -220,6 +220,9 @@ class MainActivity : AbsCastActivity() {
         if (PreferenceUtil.lastTab == R.id.action_search) {
             PreferenceUtil.lastTab = R.id.action_search_tab
         }
+        if (PreferenceUtil.lastTab == R.id.action_song) {
+            PreferenceUtil.lastTab = R.id.action_web
+        }
 
         val categoryInfo: CategoryInfo = PreferenceUtil.libraryCategory.first { it.visible }
         if (categoryInfo.visible) {

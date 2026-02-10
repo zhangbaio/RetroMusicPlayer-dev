@@ -150,7 +150,6 @@ object PreferenceUtil {
 
     val defaultCategories = listOf(
         CategoryInfo(CategoryInfo.Category.Home, true),
-        CategoryInfo(CategoryInfo.Category.Songs, true),
         CategoryInfo(CategoryInfo.Category.Web, true),
         CategoryInfo(CategoryInfo.Category.Database, true),
         CategoryInfo(CategoryInfo.Category.Albums, false),
@@ -171,7 +170,7 @@ object PreferenceUtil {
     private fun defaultCategory(category: CategoryInfo.Category): CategoryInfo {
         return when (category) {
             CategoryInfo.Category.Home -> CategoryInfo(category, true)
-            CategoryInfo.Category.Songs -> CategoryInfo(category, true)
+            CategoryInfo.Category.Songs -> CategoryInfo(category, false)
             CategoryInfo.Category.Web -> CategoryInfo(category, true)
             CategoryInfo.Category.Database -> CategoryInfo(category, true)
             CategoryInfo.Category.Search -> CategoryInfo(category, true)
@@ -194,9 +193,14 @@ object PreferenceUtil {
             val visibleCount = visibilityMap.values.count { it }
             visibilityMap[CategoryInfo.Category.Web] = visibleCount < 5
         }
+        if (visibilityMap[CategoryInfo.Category.Songs] == true &&
+            visibilityMap[CategoryInfo.Category.Web] != true
+        ) {
+            visibilityMap[CategoryInfo.Category.Web] = true
+        }
+        visibilityMap[CategoryInfo.Category.Songs] = false
         val orderedCategories = listOf(
             CategoryInfo.Category.Home,
-            CategoryInfo.Category.Songs,
             CategoryInfo.Category.Web,
             CategoryInfo.Category.Database,
             CategoryInfo.Category.Albums,

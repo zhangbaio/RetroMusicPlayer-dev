@@ -94,13 +94,10 @@ class LibraryViewModel(
     fun getFabMargin(): LiveData<Int> = fabMargin
 
     private suspend fun fetchSongs() {
-        val allSongs = repository.allSongs()
-        val visibleSongs = if (PreferenceUtil.isLocalSongsBootstrapRunning) {
-            allSongs.filter { it.sourceType == SourceType.SERVER || it.sourceType == SourceType.WEBDAV }
-        } else {
-            allSongs
+        val remoteSongs = repository.allSongs().filter {
+            it.sourceType == SourceType.SERVER || it.sourceType == SourceType.WEBDAV
         }
-        songs.postValue(visibleSongs)
+        songs.postValue(remoteSongs)
     }
 
     private suspend fun fetchAlbums() {
@@ -192,7 +189,9 @@ class LibraryViewModel(
     }
 
     fun shuffleSongs() = viewModelScope.launch(IO) {
-        val songs = repository.allSongs()
+        val songs = repository.allSongs().filter {
+            it.sourceType == SourceType.SERVER || it.sourceType == SourceType.WEBDAV
+        }
         withContext(Main) {
             MusicPlayerRemote.openAndShuffleQueue(songs, true)
         }
