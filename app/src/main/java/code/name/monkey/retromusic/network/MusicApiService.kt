@@ -25,6 +25,42 @@ interface MusicApiService {
         @Query("sortOrder") sortOrder: String? = null
     ): MusicApiResponse<PagedResult<TrackResponse>>
 
+    @GET("/api/v1/search/classify")
+    suspend fun classifySearch(
+        @Query("q") query: String
+    ): MusicApiResponse<SearchClassifyApiResponse>
+
+    @GET("/api/v1/search/songs")
+    suspend fun searchSongs(
+        @Query("q") query: String,
+        @Query("scope") scope: String = "all",
+        @Query("pageNo") pageNo: Int = 1,
+        @Query("pageSize") pageSize: Int = 50
+    ): MusicApiResponse<PagedResult<TrackResponse>>
+
+    @GET("/api/v1/search/artists")
+    suspend fun searchArtists(
+        @Query("q") query: String,
+        @Query("pageNo") pageNo: Int = 1,
+        @Query("pageSize") pageSize: Int = 50
+    ): MusicApiResponse<PagedResult<ArtistSearchApiResponse>>
+
+    @GET("/api/v1/search/albums")
+    suspend fun searchAlbums(
+        @Query("artist") artist: String? = null,
+        @Query("q") query: String? = null,
+        @Query("pageNo") pageNo: Int = 1,
+        @Query("pageSize") pageSize: Int = 50
+    ): MusicApiResponse<PagedResult<AlbumSearchApiResponse>>
+
+    @GET("/api/v1/search/artist-tracks")
+    suspend fun searchArtistTracks(
+        @Query("artist") artist: String,
+        @Query("q") query: String? = null,
+        @Query("pageNo") pageNo: Int = 1,
+        @Query("pageSize") pageSize: Int = 50
+    ): MusicApiResponse<PagedResult<TrackResponse>>
+
     @GET("/api/v1/tracks/search")
     suspend fun searchTracks(
         @Query("q") query: String,

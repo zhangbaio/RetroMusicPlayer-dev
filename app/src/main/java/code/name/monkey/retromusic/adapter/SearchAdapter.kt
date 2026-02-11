@@ -45,7 +45,10 @@ import java.util.*
 
 class SearchAdapter(
     private val activity: FragmentActivity,
-    private var dataSet: List<Any>
+    private var dataSet: List<Any>,
+    private val onArtistClick: ((Artist) -> Unit)? = null,
+    private val onAlbumClick: ((Album) -> Unit)? = null,
+    private val onSongClick: ((Song) -> Unit)? = null
 ) : RecyclerView.Adapter<SearchAdapter.ViewHolder>() {
 
     @SuppressLint("NotifyDataSetChanged")
@@ -134,7 +137,6 @@ class SearchAdapter(
             PLAYLIST -> {
                 val playlist = dataSet[position] as PlaylistWithSongs
                 holder.title?.text = playlist.playlistEntity.playlistName
-                //holder.text?.text = MusicUtil.playlistInfoString(activity, playlist.songs)
             }
 
             ALBUM_ARTIST -> {
@@ -187,24 +189,45 @@ class SearchAdapter(
             val item = dataSet[layoutPosition]
             when (itemViewType) {
                 ALBUM -> {
-                    activity.findNavController(R.id.fragment_container).navigate(
-                        R.id.albumDetailsFragment,
-                        bundleOf(EXTRA_ALBUM_ID to (item as Album).id)
-                    )
+                    val album = item as Album
+                    val consumed = onAlbumClick?.let {
+                        it(album)
+                        true
+                    } ?: false
+                    if (!consumed) {
+                        activity.findNavController(R.id.fragment_container).navigate(
+                            R.id.albumDetailsFragment,
+                            bundleOf(EXTRA_ALBUM_ID to album.id)
+                        )
+                    }
                 }
 
                 ARTIST -> {
-                    activity.findNavController(R.id.fragment_container).navigate(
-                        R.id.artistDetailsFragment,
-                        bundleOf(EXTRA_ARTIST_ID to (item as Artist).id)
-                    )
+                    val artist = item as Artist
+                    val consumed = onArtistClick?.let {
+                        it(artist)
+                        true
+                    } ?: false
+                    if (!consumed) {
+                        activity.findNavController(R.id.fragment_container).navigate(
+                            R.id.artistDetailsFragment,
+                            bundleOf(EXTRA_ARTIST_ID to artist.id)
+                        )
+                    }
                 }
 
                 ALBUM_ARTIST -> {
-                    activity.findNavController(R.id.fragment_container).navigate(
-                        R.id.albumArtistDetailsFragment,
-                        bundleOf(EXTRA_ARTIST_NAME to (item as Artist).name)
-                    )
+                    val artist = item as Artist
+                    val consumed = onArtistClick?.let {
+                        it(artist)
+                        true
+                    } ?: false
+                    if (!consumed) {
+                        activity.findNavController(R.id.fragment_container).navigate(
+                            R.id.albumArtistDetailsFragment,
+                            bundleOf(EXTRA_ARTIST_NAME to artist.name)
+                        )
+                    }
                 }
 
                 GENRE -> {
@@ -222,8 +245,13 @@ class SearchAdapter(
                 }
 
                 SONG -> {
-                    MusicPlayerRemote.playNext(item as Song)
-                    MusicPlayerRemote.playNextSong()
+                    val song = item as Song
+                    if (onSongClick != null) {
+                        onSongClick.invoke(song)
+                    } else {
+                        MusicPlayerRemote.playNext(song)
+                        MusicPlayerRemote.playNextSong()
+                    }
                 }
             }
         }

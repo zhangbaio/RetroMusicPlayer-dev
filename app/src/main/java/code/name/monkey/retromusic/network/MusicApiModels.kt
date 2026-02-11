@@ -56,6 +56,33 @@ data class TrackDetailResponse(
     @SerializedName("updatedAt") val updatedAt: String?
 )
 
+/** Search classify response */
+data class SearchClassifyApiResponse(
+    @SerializedName("mode") val mode: String?,
+    @SerializedName("confidence") val confidence: Double?,
+    @SerializedName("normalizedArtist") val normalizedArtist: String?,
+    @SerializedName("allSongCount") val allSongCount: Long?,
+    @SerializedName("mineSongCount") val mineSongCount: Long?,
+    @SerializedName("artistCount") val artistCount: Long?,
+    @SerializedName("albumCount") val albumCount: Long?,
+    @SerializedName("artistSongCount") val artistSongCount: Long?
+)
+
+/** Search artist row */
+data class ArtistSearchApiResponse(
+    @SerializedName("artist") val artist: String,
+    @SerializedName("trackCount") val trackCount: Long?,
+    @SerializedName("coverTrackId") val coverTrackId: Long?
+)
+
+/** Search album row */
+data class AlbumSearchApiResponse(
+    @SerializedName("album") val album: String,
+    @SerializedName("artist") val artist: String,
+    @SerializedName("trackCount") val trackCount: Long?,
+    @SerializedName("coverTrackId") val coverTrackId: Long?
+)
+
 /** Scan task request */
 data class ScanTaskRequest(
     @SerializedName("taskType") val taskType: String,

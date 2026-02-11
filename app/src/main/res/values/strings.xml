@@ -278,6 +278,10 @@
     <string name="no_playlists">You have no playlists</string>
     <string name="no_purchase_found">No purchase found.</string>
     <string name="no_results">No results</string>
+    <string name="search_tab_all_songs">All Songs</string>
+    <string name="search_tab_my_songs">My Playlist Songs</string>
+    <string name="search_server_not_configured">Please configure and enable a music server first.</string>
+    <string name="search_server_error">Search failed. Please try again.</string>
     <string name="no_songs">You have no songs</string>
     <string name="no_search_results">No search results</string>
     <string name="empty_state_description_generic">Try scanning your library or syncing a source.</string>
