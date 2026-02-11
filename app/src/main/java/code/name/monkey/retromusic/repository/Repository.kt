@@ -243,6 +243,16 @@ class RealRepository(
 
     override suspend fun allSongs(): List<Song> = serverRepository.getAllSongs()
 
+    suspend fun fetchWebSongs(): List<Song> {
+        val result = serverRepository.fetchAggregatedSongsLive()
+        return result.getOrElse {
+            Log.w(TAG, "Failed to fetch songs from aggregate API, fallback to local cache", it)
+            serverRepository.getAllSongs()
+        }.filter { song ->
+            song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV
+        }
+    }
+
     override suspend fun search(query: String?, filter: Filter): MutableList<Any> =
         searchRepository.searchAll(context, query, filter)
 

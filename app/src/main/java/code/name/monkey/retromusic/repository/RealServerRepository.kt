@@ -90,10 +90,30 @@ class RealServerRepository(
             var totalSynced = 0
             var totalCount = 0L
             val allTrackIds = mutableListOf<Long>()
+            var useAggregatedEndpoint = true
 
             // Paginate through all tracks
             while (true) {
-                val response = apiService.getTracks(pageNo = pageNo, pageSize = SYNC_PAGE_SIZE)
+                val response = try {
+                    if (useAggregatedEndpoint) {
+                        apiService.getAggregatedTracks(
+                            pageNo = pageNo,
+                            pageSize = SYNC_PAGE_SIZE,
+                            sortBy = "updated_at",
+                            sortOrder = "DESC"
+                        )
+                    } else {
+                        apiService.getTracks(pageNo = pageNo, pageSize = SYNC_PAGE_SIZE)
+                    }
+                } catch (e: Exception) {
+                    if (useAggregatedEndpoint && pageNo == 1) {
+                        Log.w(TAG, "Aggregated tracks endpoint unavailable, fallback to /api/v1/tracks", e)
+                        useAggregatedEndpoint = false
+                        apiService.getTracks(pageNo = pageNo, pageSize = SYNC_PAGE_SIZE)
+                    } else {
+                        throw e
+                    }
+                }
                 if (!response.isSuccess || response.data == null) {
                     if (totalSynced == 0) {
                         return@withContext Result.failure(Exception("API error: ${response.message}"))
@@ -154,6 +174,42 @@ class RealServerRepository(
         } catch (e: Exception) {
             Log.e(TAG, "Sync failed", e)
             Result.failure(e)
+        }
+    }
+
+    override suspend fun fetchAggregatedSongsLive(): Result<List<Song>> = withContext(Dispatchers.IO) {
+        val enabledConfigs = serverDao.getEnabledConfigs()
+        if (enabledConfigs.isEmpty()) {
+            return@withContext Result.success(emptyList())
+        }
+
+        val mergedSongs = mutableListOf<Song>()
+        val dedupKeys = LinkedHashSet<String>()
+        var lastError: Exception? = null
+
+        for (config in enabledConfigs) {
+            val configResult = fetchAggregatedSongsByConfig(config)
+            configResult.onSuccess { songs ->
+                songs.forEach { song ->
+                    val dedupKey = "${song.webDavConfigId}:${song.data}"
+                    if (dedupKeys.add(dedupKey)) {
+                        mergedSongs.add(song)
+                    }
+                }
+            }.onFailure { throwable ->
+                Log.w(TAG, "Failed to fetch aggregate songs, configId=${config.id}", throwable)
+                lastError = if (throwable is Exception) throwable else Exception(throwable)
+            }
+        }
+
+        if (mergedSongs.isNotEmpty()) {
+            return@withContext Result.success(mergedSongs)
+        }
+
+        return@withContext if (lastError != null) {
+            Result.failure(lastError!!)
+        } else {
+            Result.success(emptyList())
         }
     }
 
@@ -372,6 +428,63 @@ class RealServerRepository(
         }
 
     // ---- Conversion helpers ----
+
+    private suspend fun fetchAggregatedSongsByConfig(config: ServerConfigEntity): Result<List<Song>> {
+        return try {
+            val apiService = apiServiceProvider(config.toModel())
+            val collectedSongs = mutableListOf<Song>()
+            var pageNo = 1
+            var useAggregatedEndpoint = true
+
+            while (true) {
+                val response = try {
+                    if (useAggregatedEndpoint) {
+                        apiService.getAggregatedTracks(
+                            pageNo = pageNo,
+                            pageSize = SYNC_PAGE_SIZE,
+                            sortBy = "updated_at",
+                            sortOrder = "DESC"
+                        )
+                    } else {
+                        apiService.getTracks(pageNo = pageNo, pageSize = SYNC_PAGE_SIZE)
+                    }
+                } catch (e: Exception) {
+                    if (useAggregatedEndpoint && pageNo == 1) {
+                        Log.w(TAG, "Aggregated endpoint unavailable for configId=${config.id}, fallback to /api/v1/tracks", e)
+                        useAggregatedEndpoint = false
+                        apiService.getTracks(pageNo = pageNo, pageSize = SYNC_PAGE_SIZE)
+                    } else {
+                        throw e
+                    }
+                }
+
+                if (!response.isSuccess || response.data == null) {
+                    if (pageNo == 1) {
+                        return Result.failure(Exception("API error: ${response.message}"))
+                    }
+                    break
+                }
+
+                val records = response.data.records
+                if (records.isEmpty()) {
+                    break
+                }
+
+                records.forEach { track ->
+                    collectedSongs.add(track.toEntity(config.id).toModel(config))
+                }
+
+                if (records.size < SYNC_PAGE_SIZE) {
+                    break
+                }
+                pageNo++
+            }
+
+            Result.success(collectedSongs)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     private fun ServerConfigEntity.toModel(): ServerConfig {
         return ServerConfig(

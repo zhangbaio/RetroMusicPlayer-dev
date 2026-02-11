@@ -3,6 +3,15 @@ package code.name.monkey.retromusic.network
 import retrofit2.http.*
 
 interface MusicApiService {
+    @GET("/api/v1/tracks/aggregate")
+    suspend fun getAggregatedTracks(
+        @Query("pageNo") pageNo: Int = 1,
+        @Query("pageSize") pageSize: Int = 200,
+        @Query("keyword") keyword: String? = null,
+        @Query("sortBy") sortBy: String? = null,
+        @Query("sortOrder") sortOrder: String? = null
+    ): MusicApiResponse<PagedResult<TrackResponse>>
+
     @GET("/api/v1/tracks")
     suspend fun getTracks(
         @Query("pageNo") pageNo: Int = 1,

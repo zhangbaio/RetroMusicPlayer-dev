@@ -94,9 +94,7 @@ class LibraryViewModel(
     fun getFabMargin(): LiveData<Int> = fabMargin
 
     private suspend fun fetchSongs() {
-        val remoteSongs = repository.allSongs().filter {
-            it.sourceType == SourceType.SERVER || it.sourceType == SourceType.WEBDAV
-        }
+        val remoteSongs = repository.fetchWebSongs()
         songs.postValue(remoteSongs)
     }
 
@@ -189,9 +187,7 @@ class LibraryViewModel(
     }
 
     fun shuffleSongs() = viewModelScope.launch(IO) {
-        val songs = repository.allSongs().filter {
-            it.sourceType == SourceType.SERVER || it.sourceType == SourceType.WEBDAV
-        }
+        val songs = repository.fetchWebSongs()
         withContext(Main) {
             MusicPlayerRemote.openAndShuffleQueue(songs, true)
         }
@@ -224,6 +220,8 @@ class LibraryViewModel(
     suspend fun insertSongs(songs: List<SongEntity>) = repository.insertSongs(songs)
     suspend fun removeSongFromPlaylist(songEntity: SongEntity) =
         repository.removeSongFromPlaylist(songEntity)
+    suspend fun isSongFavorite(song: Song) = repository.isSongFavorite(song)
+    suspend fun toggleSongFavorite(song: Song) = repository.toggleSongFavorite(song)
 
     private suspend fun checkPlaylistExists(playlistName: String): List<PlaylistEntity> =
         repository.checkPlaylistExists(playlistName)
@@ -351,6 +349,19 @@ class LibraryViewModel(
 
     fun addToPlaylist(context: Context, playlistName: String, songs: List<Song>) {
         viewModelScope.launch(IO) {
+            val allServerSongs = songs.isNotEmpty() && songs.all { isServerSong(it) }
+            if (allServerSongs) {
+                val backendResult = repository.addServerSongsToPlaylist(playlistName, songs)
+                if (backendResult.isFailure) {
+                    withContext(Main) {
+                        context.showToast(
+                            backendResult.exceptionOrNull()?.message ?: "后端歌单写入失败"
+                        )
+                    }
+                    return@launch
+                }
+            }
+
             val playlists = checkPlaylistExists(playlistName)
             if (playlists.isEmpty()) {
                 val playlistId: Long =
@@ -383,6 +394,10 @@ class LibraryViewModel(
                 )
             }
         }
+    }
+
+    private fun isServerSong(song: Song): Boolean {
+        return song.sourceType == SourceType.SERVER || song.sourceType == SourceType.WEBDAV
     }
 
     fun setFabMargin(context: Context, bottomMargin: Int) {

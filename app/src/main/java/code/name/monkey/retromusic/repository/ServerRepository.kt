@@ -41,6 +41,9 @@ interface ServerRepository {
         onProgress: (suspend (syncedCount: Int, totalCount: Long) -> Unit)? = null
     ): Result<Int>
 
+    // ---- Live query: fetch songs directly from aggregate API ----
+    suspend fun fetchAggregatedSongsLive(): Result<List<Song>>
+
     // ---- Backend scan management ----
     suspend fun triggerBackendScan(configId: Long, type: String = "INCREMENTAL"): Result<Long>
     suspend fun getScanTaskStatus(configId: Long, taskId: Long): Result<ServerSyncProgress>
