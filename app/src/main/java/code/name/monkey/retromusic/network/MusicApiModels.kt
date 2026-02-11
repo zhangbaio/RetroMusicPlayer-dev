@@ -79,3 +79,47 @@ data class ScanTaskResponse(
     @SerializedName("progressPct") val progressPct: Int?,
     @SerializedName("errorSummary") val errorSummary: String?
 )
+
+/** Playlist summary */
+data class PlaylistApiResponse(
+    @SerializedName("id") val id: Long,
+    @SerializedName("name") val name: String,
+    @SerializedName("playlistType") val playlistType: String?,
+    @SerializedName("systemCode") val systemCode: String?,
+    @SerializedName("sortNo") val sortNo: Int?,
+    @SerializedName("trackCount") val trackCount: Int?
+)
+
+/** Create playlist request */
+data class CreatePlaylistApiRequest(
+    @SerializedName("name") val name: String
+)
+
+/** Generic track id list request */
+data class TrackIdsApiRequest(
+    @SerializedName("trackIds") val trackIds: List<Long>
+)
+
+/** Add tracks to playlist response */
+data class AddPlaylistTracksApiResponse(
+    @SerializedName("playlistId") val playlistId: Long?,
+    @SerializedName("requestedCount") val requestedCount: Int?,
+    @SerializedName("addedCount") val addedCount: Int?,
+    @SerializedName("duplicateCount") val duplicateCount: Int?,
+    @SerializedName("trackCount") val trackCount: Int?
+)
+
+/** Remove tracks from playlist response */
+data class PlaylistTrackOperationApiResponse(
+    @SerializedName("playlistId") val playlistId: Long?,
+    @SerializedName("requestedCount") val requestedCount: Int?,
+    @SerializedName("affectedCount") val affectedCount: Int?,
+    @SerializedName("notFoundCount") val notFoundCount: Int?,
+    @SerializedName("trackCount") val trackCount: Int?
+)
+
+/** Favorite status response */
+data class FavoriteStatusApiResponse(
+    @SerializedName("trackId") val trackId: Long?,
+    @SerializedName("favorite") val favorite: Boolean
+)

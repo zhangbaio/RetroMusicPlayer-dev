@@ -14,6 +14,13 @@ data class ServerSyncProgress(
     val message: String?
 )
 
+data class ServerPlaylist(
+    val id: Long,
+    val name: String,
+    val playlistType: String?,
+    val systemCode: String?
+)
+
 /**
  * Repository interface for music server API operations.
  * Replaces the WebDAVRepository interface.
@@ -37,6 +44,14 @@ interface ServerRepository {
     // ---- Backend scan management ----
     suspend fun triggerBackendScan(configId: Long, type: String = "INCREMENTAL"): Result<Long>
     suspend fun getScanTaskStatus(configId: Long, taskId: Long): Result<ServerSyncProgress>
+
+    // ---- Playlist & favorite management (backend) ----
+    suspend fun listPlaylists(configId: Long): Result<List<ServerPlaylist>>
+    suspend fun createPlaylist(configId: Long, name: String): Result<ServerPlaylist>
+    suspend fun addTracksToPlaylist(configId: Long, playlistId: Long, trackIds: List<Long>): Result<Int>
+    suspend fun removeTracksFromPlaylist(configId: Long, playlistId: Long, trackIds: List<Long>): Result<Int>
+    suspend fun getFavoriteStatus(configId: Long, serverTrackId: Long): Result<Boolean>
+    suspend fun setFavorite(configId: Long, serverTrackId: Long, favorite: Boolean): Result<Boolean>
 
     // ---- Song queries (from local cache) ----
     suspend fun getAllSongs(): List<Song>

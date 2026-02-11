@@ -31,6 +31,9 @@ interface PlaylistDao {
     @Query("SELECT * FROM PlaylistEntity")
     suspend fun playlists(): List<PlaylistEntity>
 
+    @Query("SELECT * FROM PlaylistEntity WHERE playlist_id = :playlistId LIMIT 1")
+    suspend fun getPlaylistEntityById(playlistId: Long): PlaylistEntity?
+
     @Query("DELETE FROM SongEntity WHERE playlist_creator_id = :playlistId")
     suspend fun deletePlaylistSongs(playlistId: Long)
 

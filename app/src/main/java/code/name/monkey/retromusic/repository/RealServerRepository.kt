@@ -10,6 +10,8 @@ import code.name.monkey.retromusic.model.SourceType
 import code.name.monkey.retromusic.network.MusicApiService
 import code.name.monkey.retromusic.network.ScanTaskRequest
 import code.name.monkey.retromusic.network.TrackDetailResponse
+import code.name.monkey.retromusic.network.CreatePlaylistApiRequest
+import code.name.monkey.retromusic.network.TrackIdsApiRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -202,6 +204,129 @@ class RealServerRepository(
             }
         }
 
+    // ---- Playlist & favorite management ----
+
+    override suspend fun listPlaylists(configId: Long): Result<List<ServerPlaylist>> =
+        withContext(Dispatchers.IO) {
+            val apiService = resolveApiService(configId).getOrElse { return@withContext Result.failure(it) }
+            try {
+                val response = apiService.getPlaylists()
+                if (!response.isSuccess || response.data == null) {
+                    return@withContext Result.failure(Exception("Failed to list playlists: ${response.message}"))
+                }
+                Result.success(
+                    response.data.map {
+                        ServerPlaylist(
+                            id = it.id,
+                            name = it.name,
+                            playlistType = it.playlistType,
+                            systemCode = it.systemCode
+                        )
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to list playlists", e)
+                Result.failure(e)
+            }
+        }
+
+    override suspend fun createPlaylist(configId: Long, name: String): Result<ServerPlaylist> =
+        withContext(Dispatchers.IO) {
+            val apiService = resolveApiService(configId).getOrElse { return@withContext Result.failure(it) }
+            try {
+                val response = apiService.createPlaylist(CreatePlaylistApiRequest(name.trim()))
+                if (!response.isSuccess || response.data == null) {
+                    return@withContext Result.failure(Exception("Failed to create playlist: ${response.message}"))
+                }
+                val created = response.data
+                Result.success(
+                    ServerPlaylist(
+                        id = created.id,
+                        name = created.name,
+                        playlistType = created.playlistType,
+                        systemCode = created.systemCode
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create playlist", e)
+                Result.failure(e)
+            }
+        }
+
+    override suspend fun addTracksToPlaylist(
+        configId: Long,
+        playlistId: Long,
+        trackIds: List<Long>
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        val apiService = resolveApiService(configId).getOrElse { return@withContext Result.failure(it) }
+        try {
+            val normalized = trackIds.filter { it > 0 }.distinct()
+            if (normalized.isEmpty()) {
+                return@withContext Result.failure(IllegalArgumentException("trackIds is empty"))
+            }
+            val response = apiService.addTracksToPlaylist(playlistId, TrackIdsApiRequest(normalized))
+            if (!response.isSuccess || response.data == null) {
+                return@withContext Result.failure(Exception("Failed to add tracks to playlist: ${response.message}"))
+            }
+            Result.success(response.data.addedCount ?: 0)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to add tracks to playlist", e)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun removeTracksFromPlaylist(
+        configId: Long,
+        playlistId: Long,
+        trackIds: List<Long>
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        val apiService = resolveApiService(configId).getOrElse { return@withContext Result.failure(it) }
+        try {
+            val normalized = trackIds.filter { it > 0 }.distinct()
+            if (normalized.isEmpty()) {
+                return@withContext Result.failure(IllegalArgumentException("trackIds is empty"))
+            }
+            val response = apiService.removeTracksFromPlaylist(playlistId, TrackIdsApiRequest(normalized))
+            if (!response.isSuccess || response.data == null) {
+                return@withContext Result.failure(Exception("Failed to remove tracks from playlist: ${response.message}"))
+            }
+            Result.success(response.data.affectedCount ?: 0)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to remove tracks from playlist", e)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getFavoriteStatus(configId: Long, serverTrackId: Long): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            val apiService = resolveApiService(configId).getOrElse { return@withContext Result.failure(it) }
+            try {
+                val response = apiService.getFavoriteStatus(serverTrackId)
+                if (!response.isSuccess || response.data == null) {
+                    return@withContext Result.failure(Exception("Failed to get favorite status: ${response.message}"))
+                }
+                Result.success(response.data.favorite)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get favorite status", e)
+                Result.failure(e)
+            }
+        }
+
+    override suspend fun setFavorite(configId: Long, serverTrackId: Long, favorite: Boolean): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            val apiService = resolveApiService(configId).getOrElse { return@withContext Result.failure(it) }
+            try {
+                val response = if (favorite) apiService.favoriteTrack(serverTrackId) else apiService.unfavoriteTrack(serverTrackId)
+                if (!response.isSuccess || response.data == null) {
+                    return@withContext Result.failure(Exception("Failed to set favorite status: ${response.message}"))
+                }
+                Result.success(response.data.favorite)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to set favorite status", e)
+                Result.failure(e)
+            }
+        }
+
     // ---- Song queries ----
 
     override suspend fun getAllSongs(): List<Song> = withContext(Dispatchers.IO) {
@@ -357,5 +482,16 @@ class RealServerRepository(
         val cleaned = path.trimEnd('/')
         val lastSlash = cleaned.lastIndexOf('/')
         return if (lastSlash > 0) cleaned.substring(0, lastSlash) else ""
+    }
+
+    private suspend fun resolveApiService(configId: Long): Result<MusicApiService> {
+        val config = serverDao.getConfigById(configId)?.toModel()
+            ?: return Result.failure(IllegalArgumentException("Config not found: $configId"))
+        return try {
+            Result.success(apiServiceProvider(config))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create API service", e)
+            Result.failure(e)
+        }
     }
 }

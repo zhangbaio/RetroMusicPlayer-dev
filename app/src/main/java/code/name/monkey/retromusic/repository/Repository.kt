@@ -15,6 +15,7 @@
 package code.name.monkey.retromusic.repository
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.map
 import code.name.monkey.retromusic.*
@@ -29,6 +30,7 @@ import code.name.monkey.retromusic.network.Result.Success
 import code.name.monkey.retromusic.network.model.LastFmAlbum
 import code.name.monkey.retromusic.network.model.LastFmArtist
 import code.name.monkey.retromusic.util.logE
+import kotlin.math.abs
 
 interface Repository {
 
@@ -114,6 +116,11 @@ class RealRepository(
     private val localDataRepository: LocalDataRepository,
     private val serverRepository: ServerRepository,
 ) : Repository {
+
+    companion object {
+        private const val TAG = "RealRepository"
+        private val SERVER_TRACK_ID_REGEX = Regex("/api/v1/tracks/(\\d+)/(?:stream|stream-proxy)")
+    }
 
     override suspend fun deleteSongs(songs: List<Song>) = roomRepository.deleteSongs(songs)
 
@@ -239,6 +246,155 @@ class RealRepository(
     override suspend fun search(query: String?, filter: Filter): MutableList<Any> =
         searchRepository.searchAll(context, query, filter)
 
+    suspend fun isSongFavorite(song: Song): Boolean {
+        if (!isServerSong(song)) {
+            return roomRepository.isSongFavorite(context, song.id)
+        }
+        val configId = resolveSongConfigId(song) ?: return roomRepository.isSongFavorite(context, song.id)
+        val serverTrackId = resolveServerTrackId(song) ?: return roomRepository.isSongFavorite(context, song.id)
+        return serverRepository.getFavoriteStatus(configId, serverTrackId).getOrElse {
+            roomRepository.isSongFavorite(context, song.id)
+        }
+    }
+
+    suspend fun toggleSongFavorite(song: Song): Boolean {
+        val target = !isSongFavorite(song)
+        if (isServerSong(song)) {
+            val configId = resolveSongConfigId(song)
+                ?: throw IllegalStateException("未找到服务端配置ID")
+            val serverTrackId = resolveServerTrackId(song)
+                ?: throw IllegalStateException("无法解析服务端歌曲ID")
+            serverRepository.setFavorite(configId, serverTrackId, target).getOrElse { throw it }
+        }
+        syncLocalFavoriteCache(song, target)
+        return target
+    }
+
+    suspend fun addServerSongsToPlaylist(playlistName: String, songs: List<Song>): kotlin.Result<Unit> {
+        if (songs.isEmpty()) {
+            return kotlin.Result.success(Unit)
+        }
+        if (!songs.all { isServerSong(it) }) {
+            return kotlin.Result.failure(IllegalArgumentException("包含非服务端歌曲"))
+        }
+        val safeName = playlistName.trim()
+        if (safeName.isEmpty()) {
+            return kotlin.Result.failure(IllegalArgumentException("歌单名不能为空"))
+        }
+        val configId = resolveSongConfigId(songs.first())
+            ?: return kotlin.Result.failure(IllegalStateException("未找到服务端配置"))
+        val trackIds = songs.mapNotNull { resolveServerTrackId(it) }.distinct()
+        if (trackIds.size != songs.size) {
+            return kotlin.Result.failure(IllegalStateException("部分歌曲缺少服务端ID，无法加入后端歌单"))
+        }
+
+        return kotlin.runCatching {
+            val playlists = serverRepository.listPlaylists(configId).getOrThrow()
+            val playlist = playlists.firstOrNull { it.name.equals(safeName, ignoreCase = true) }
+                ?: serverRepository.createPlaylist(configId, safeName).getOrThrow()
+            serverRepository.addTracksToPlaylist(configId, playlist.id, trackIds).getOrThrow()
+            Unit
+        }
+    }
+
+    private suspend fun removeServerSongsFromPlaylist(songs: List<SongEntity>) {
+        if (songs.isEmpty()) {
+            return
+        }
+
+        val serverSongs = songs.filter { isServerSong(it) }
+        if (serverSongs.isEmpty()) {
+            return
+        }
+
+        val playlistCreatorId = songs.first().playlistCreatorId
+        if (playlistCreatorId <= 0) {
+            return
+        }
+
+        val playlist = roomRepository.getPlaylistEntityById(playlistCreatorId) ?: return
+        val playlistName = playlist.playlistName.trim()
+        if (playlistName.isEmpty()) {
+            return
+        }
+
+        val grouped = serverSongs.groupBy { resolveSongConfigId(it) }
+        grouped.forEach { (configId, groupedSongs) ->
+            if (configId == null) {
+                return@forEach
+            }
+            val serverTrackIds = groupedSongs.mapNotNull { resolveServerTrackId(it) }.distinct()
+            if (serverTrackIds.isEmpty()) {
+                return@forEach
+            }
+
+            val remotePlaylists = serverRepository.listPlaylists(configId).getOrElse { ex ->
+                Log.w(TAG, "Failed to list backend playlists for removal, configId=$configId", ex)
+                return@forEach
+            }
+            val targetPlaylist = remotePlaylists.firstOrNull { it.name.equals(playlistName, ignoreCase = true) }
+                ?: return@forEach
+
+            val removeResult = serverRepository.removeTracksFromPlaylist(
+                configId = configId,
+                playlistId = targetPlaylist.id,
+                trackIds = serverTrackIds
+            )
+            removeResult.exceptionOrNull()?.let { ex ->
+                Log.w(
+                    TAG,
+                    "Failed to remove tracks from backend playlist, configId=$configId, playlist=${targetPlaylist.name}, trackCount=${serverTrackIds.size}",
+                    ex
+                )
+            }
+        }
+    }
+
+    private suspend fun syncLocalFavoriteCache(song: Song, favorite: Boolean) {
+        val playlist = favoritePlaylist()
+        val songEntity = song.toSongEntity(playlist.playListId)
+        val alreadyFavorite = isFavoriteSong(songEntity).isNotEmpty()
+        if (favorite && !alreadyFavorite) {
+            insertSongs(listOf(songEntity))
+        } else if (!favorite && alreadyFavorite) {
+            removeSongFromPlaylist(songEntity)
+        }
+    }
+
+    private suspend fun resolveSongConfigId(song: Song): Long? {
+        return song.webDavConfigId ?: serverRepository.getEnabledConfigs().firstOrNull()?.id
+    }
+
+    private suspend fun resolveSongConfigId(song: SongEntity): Long? {
+        return song.webDavConfigId ?: serverRepository.getEnabledConfigs().firstOrNull()?.id
+    }
+
+    private fun resolveServerTrackId(song: Song): Long? {
+        val url = (song.remotePath ?: song.data).substringBefore('?').substringBefore('#')
+        return SERVER_TRACK_ID_REGEX.find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()
+    }
+
+    private fun resolveServerTrackId(song: SongEntity): Long? {
+        val url = (song.remotePath ?: song.data).substringBefore('?').substringBefore('#')
+        return SERVER_TRACK_ID_REGEX.find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()
+    }
+
+    private fun isServerSong(song: Song): Boolean {
+        return song.sourceType == SourceType.SERVER
+            || song.sourceType == SourceType.WEBDAV
+            || song.data.startsWith("http://")
+            || song.data.startsWith("https://")
+    }
+
+    private fun isServerSong(song: SongEntity): Boolean {
+        return song.sourceType == SourceType.SERVER.name
+            || song.sourceType == SourceType.WEBDAV.name
+            || song.data.startsWith("http://")
+            || song.data.startsWith("https://")
+            || (song.remotePath?.startsWith("http://") == true)
+            || (song.remotePath?.startsWith("https://") == true)
+    }
+
     override suspend fun getPlaylistSongs(playlist: Playlist): List<Song> =
         if (playlist is AbsCustomPlaylist) {
             playlist.songs()
@@ -320,7 +476,34 @@ class RealRepository(
     override suspend fun createPlaylist(playlistEntity: PlaylistEntity): Long =
         roomRepository.createPlaylist(playlistEntity)
 
-    override suspend fun fetchPlaylists(): List<PlaylistEntity> = roomRepository.playlists()
+    override suspend fun fetchPlaylists(): List<PlaylistEntity> {
+        val localPlaylists = roomRepository.playlists().toMutableList()
+        val existingNames = localPlaylists.map { it.playlistName.trim().lowercase() }.toMutableSet()
+
+        val serverExtras = mutableListOf<PlaylistEntity>()
+        val enabledConfigs = serverRepository.getEnabledConfigs()
+        enabledConfigs.forEach { config ->
+            val remotePlaylists = serverRepository.listPlaylists(config.id).getOrElse { emptyList() }
+            remotePlaylists.forEach { playlist ->
+                val name = playlist.name.trim()
+                if (name.isEmpty()) {
+                    return@forEach
+                }
+                val key = name.lowercase()
+                if (existingNames.add(key)) {
+                    val syntheticId = -abs(("server-playlist|${config.id}|$key").hashCode().toLong()).coerceAtLeast(1L)
+                    serverExtras.add(PlaylistEntity(playListId = syntheticId, playlistName = name))
+                }
+            }
+        }
+
+        if (serverExtras.isEmpty()) {
+            return localPlaylists
+        }
+        serverExtras.sortBy { it.playlistName.lowercase() }
+        localPlaylists.addAll(serverExtras)
+        return localPlaylists
+    }
 
     override suspend fun deleteRoomPlaylist(playlists: List<PlaylistEntity>) =
         roomRepository.deletePlaylistEntities(playlists)
@@ -328,8 +511,14 @@ class RealRepository(
     override suspend fun renameRoomPlaylist(playlistId: Long, name: String) =
         roomRepository.renamePlaylistEntity(playlistId, name)
 
-    override suspend fun deleteSongsInPlaylist(songs: List<SongEntity>) =
+    override suspend fun deleteSongsInPlaylist(songs: List<SongEntity>) {
+        try {
+            removeServerSongsFromPlaylist(songs)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to remove songs from backend playlist", e)
+        }
         roomRepository.deleteSongsInPlaylist(songs)
+    }
 
     override suspend fun removeSongFromPlaylist(songEntity: SongEntity) =
         roomRepository.removeSongFromPlaylist(songEntity)
