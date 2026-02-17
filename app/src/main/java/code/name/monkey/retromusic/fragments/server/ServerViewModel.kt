@@ -116,6 +116,25 @@ class ServerViewModel(
         }
     }
 
+    fun testConnection(config: ServerConfig) {
+        viewModelScope.launch {
+            try {
+                postUiState(ServerUiState.Syncing)
+                val result = repository.testConnection(config)
+                result.fold(
+                    onSuccess = {
+                        postUiState(ServerUiState.ConnectionTestSuccess)
+                    },
+                    onFailure = { e ->
+                        postUiState(ServerUiState.Error(e.message ?: "Connection test failed"))
+                    }
+                )
+            } catch (e: Exception) {
+                postUiState(ServerUiState.Error(e.message ?: "Connection test failed"))
+            }
+        }
+    }
+
     fun loadSongs(configId: Long?) {
         viewModelScope.launch {
             try {
@@ -143,6 +162,7 @@ sealed class ServerUiState {
     object Idle : ServerUiState()
     object Syncing : ServerUiState()
     data class SyncComplete(val count: Int) : ServerUiState()
+    object ConnectionTestSuccess : ServerUiState()
     object ScanTriggered : ServerUiState()
     object ConfigSaved : ServerUiState()
     object ConfigDeleted : ServerUiState()

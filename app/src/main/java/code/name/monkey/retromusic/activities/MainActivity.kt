@@ -79,7 +79,6 @@ class MainActivity : AbsCastActivity() {
         AppRater.appLaunched(this)
 
         setupNavigationController()
-        maybeBootstrapLocalSongsOnFirstInstall()
         maybeRunServerValidation()
 
         WhatsNewFragment.showChangeLog(this)

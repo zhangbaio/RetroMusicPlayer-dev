@@ -201,7 +201,7 @@ class PlayerAlbumCoverFragment : AbsMusicServiceFragment(R.layout.fragment_playe
         return try {
             val configId = song.webDavConfigId ?: return null
             val trackIdStr = song.remotePath
-                ?.let { Regex("/api/v1/tracks/(\\d+)/stream").find(it) }
+                ?.let { Regex("/api/v1/tracks/(\\d+)/stream(?:-proxy)?").find(it) }
                 ?.groupValues?.getOrNull(1)
             val serverTrackId = trackIdStr?.toLongOrNull() ?: return null
             val serverRepository = GlobalContext.get().get<ServerRepository>()

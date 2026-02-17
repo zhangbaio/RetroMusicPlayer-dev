@@ -418,9 +418,9 @@ class LyricsFragment : AbsMainActivityFragment(R.layout.fragment_lyrics),
     private suspend fun loadServerLyrics(song: Song): String? {
         return try {
             val configId = song.webDavConfigId ?: return null
-            // Extract serverTrackId from remotePath like ".../api/v1/tracks/{id}/stream"
+            // Extract serverTrackId from remotePath like ".../api/v1/tracks/{id}/stream(-proxy)"
             val trackIdStr = song.remotePath
-                ?.let { Regex("/api/v1/tracks/(\\d+)/stream").find(it) }
+                ?.let { Regex("/api/v1/tracks/(\\d+)/stream(?:-proxy)?").find(it) }
                 ?.groupValues?.getOrNull(1)
             val serverTrackId = trackIdStr?.toLongOrNull() ?: return null
 

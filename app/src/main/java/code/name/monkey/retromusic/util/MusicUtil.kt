@@ -25,6 +25,7 @@ import code.name.monkey.retromusic.model.Artist
 import code.name.monkey.retromusic.model.Song
 import code.name.monkey.retromusic.model.lyrics.AbsSynchronizedLyrics
 import code.name.monkey.retromusic.repository.Repository
+import code.name.monkey.retromusic.repository.RealRepository
 import code.name.monkey.retromusic.repository.SongRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.IO
@@ -365,21 +366,14 @@ object MusicUtil : KoinComponent {
         return false
     }
 
-    private val repository = get<Repository>()
+    private val repository = get<RealRepository>()
     suspend fun toggleFavorite(song: Song) {
         withContext(IO) {
-            val playlist: PlaylistEntity = repository.favoritePlaylist()
-            val songEntity = song.toSongEntity(playlist.playListId)
-            val isFavorite = repository.isFavoriteSong(songEntity).isNotEmpty()
-            if (isFavorite) {
-                repository.removeSongFromPlaylist(songEntity)
-            } else {
-                repository.insertSongs(listOf(song.toSongEntity(playlist.playListId)))
-            }
+            repository.toggleSongFavorite(song)
         }
     }
 
-    suspend fun isFavorite(song: Song) = repository.isSongFavorite(song.id)
+    suspend fun isFavorite(song: Song) = repository.isSongFavorite(song)
 
     fun deleteTracks(
         activity: FragmentActivity,

@@ -88,13 +88,9 @@ class DriveModeActivity : AbsMusicServiceActivity(), Callback {
 
     private fun toggleFavorite(song: Song) {
         lifecycleScope.launch(Dispatchers.IO) {
-            val playlist = repository.favoritePlaylist()
-            val songEntity = song.toSongEntity(playlist.playListId)
-            val isFavorite = repository.isSongFavorite(song.id)
-            if (isFavorite) {
-                repository.removeSongFromPlaylist(songEntity)
-            } else {
-                repository.insertSongs(listOf(song.toSongEntity(playlist.playListId)))
+            val result = runCatching { repository.toggleSongFavorite(song) }
+            if (result.isFailure) {
+                return@launch
             }
             LocalBroadcastManager.getInstance(this@DriveModeActivity)
                 .sendBroadcast(Intent(MusicService.FAVORITE_STATE_CHANGED))
@@ -104,7 +100,7 @@ class DriveModeActivity : AbsMusicServiceActivity(), Callback {
     private fun updateFavorite() {
         lifecycleScope.launch(Dispatchers.IO) {
             val isFavorite: Boolean =
-                repository.isSongFavorite(MusicPlayerRemote.currentSong.id)
+                repository.isSongFavorite(MusicPlayerRemote.currentSong)
             withContext(Dispatchers.Main) {
                 binding.songFavourite.setImageResource(if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
             }

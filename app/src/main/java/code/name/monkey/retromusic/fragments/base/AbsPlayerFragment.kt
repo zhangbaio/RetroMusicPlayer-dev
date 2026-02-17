@@ -276,13 +276,12 @@ abstract class AbsPlayerFragment(@LayoutRes layout: Int) : AbsMusicServiceFragme
 
     protected open fun toggleFavorite(song: Song) {
         lifecycleScope.launch(IO) {
-            val playlist: PlaylistEntity = libraryViewModel.favoritePlaylist()
-            val songEntity = song.toSongEntity(playlist.playListId)
-            val isFavorite = libraryViewModel.isSongFavorite(song.id)
-            if (isFavorite) {
-                libraryViewModel.removeSongFromPlaylist(songEntity)
-            } else {
-                libraryViewModel.insertSongs(listOf(song.toSongEntity(playlist.playListId)))
+            val result = runCatching { libraryViewModel.toggleSongFavorite(song) }
+            if (result.isFailure) {
+                withContext(Main) {
+                    showToast(result.exceptionOrNull()?.message ?: "操作失败")
+                }
+                return@launch
             }
             libraryViewModel.forceReload(ReloadType.Playlists)
             LocalBroadcastManager.getInstance(requireContext())
@@ -293,7 +292,7 @@ abstract class AbsPlayerFragment(@LayoutRes layout: Int) : AbsMusicServiceFragme
     fun updateIsFavorite(animate: Boolean = false) {
         lifecycleScope.launch(IO) {
             val isFavorite: Boolean =
-                libraryViewModel.isSongFavorite(MusicPlayerRemote.currentSong.id)
+                libraryViewModel.isSongFavorite(MusicPlayerRemote.currentSong)
             withContext(Main) {
                 val icon = if (animate) {
                     if (isFavorite) R.drawable.avd_favorite else R.drawable.avd_unfavorite

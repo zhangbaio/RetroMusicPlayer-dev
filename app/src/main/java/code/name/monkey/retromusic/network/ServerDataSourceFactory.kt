@@ -9,8 +9,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
  * ExoPlayer DataSource.Factory that adds Bearer Token authentication
  * for streaming from the music server API.
  *
- * The server's /api/v1/tracks/{id}/stream endpoint returns a 302 redirect
- * to the actual WebDAV file URL. ExoPlayer follows the redirect automatically.
+ * Used for authenticated playback from server stream endpoints.
  */
 @OptIn(UnstableApi::class)
 class ServerDataSourceFactory(

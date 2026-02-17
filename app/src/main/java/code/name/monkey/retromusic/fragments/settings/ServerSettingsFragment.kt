@@ -137,6 +137,14 @@ class ServerSettingsFragment : Fragment(),
                         Toast.LENGTH_SHORT
                     )
                 }
+                is ServerUiState.ConnectionTestSuccess -> {
+                    binding.progressBar.isVisible = false
+                    binding.syncStatusText.isVisible = false
+                    requireContext().showToast(
+                        getString(R.string.webdav_connection_success),
+                        Toast.LENGTH_SHORT
+                    )
+                }
                 is ServerUiState.Error -> {
                     binding.progressBar.isVisible = false
                     binding.syncStatusText.isVisible = false
@@ -195,15 +203,23 @@ class ServerSettingsFragment : Fragment(),
     private fun testConnectionInDialog(dialogBinding: DialogServerConfigBinding) {
         val url = dialogBinding.urlEditText.text.toString().trim()
         val token = dialogBinding.tokenEditText.text.toString().trim()
+        val name = dialogBinding.nameEditText.text.toString().trim()
 
-        if (url.isEmpty() || token.isEmpty()) {
+        if (name.isEmpty() || url.isEmpty() || token.isEmpty()) {
             requireContext().showToast(getString(R.string.server_fill_required_fields))
             return
         }
 
-        // Simple test: just try to connect
         requireContext().showToast(getString(R.string.server_testing_connection), Toast.LENGTH_SHORT)
-        // TODO: Implement actual connection test via ViewModel
+        val testConfig = ServerConfig(
+            id = editingConfig?.id ?: 0L,
+            name = name,
+            serverUrl = url,
+            apiToken = token,
+            isEnabled = true,
+            lastSynced = editingConfig?.lastSynced ?: 0L
+        )
+        viewModel.testConnection(testConfig)
     }
 
     private fun saveConfig(dialogBinding: DialogServerConfigBinding) {
